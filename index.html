@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Halcyon Type</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='7' width='26' height='18' rx='4' fill='%2316181d' stroke='%237fd1b9' stroke-width='2'/><rect x='8' y='12' width='4' height='4' rx='1' fill='%237fd1b9'/><rect x='14' y='12' width='4' height='4' rx='1' fill='%23e9e6dc'/><rect x='20' y='12' width='4' height='4' rx='1' fill='%23e9e6dc'/></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="title">halcyon<b>type</b></span>
+    </div>
+    <div class="top-actions">
+      <span id="status" class="status off">Keine Tastatur verbunden</span>
+      <button id="btn-connect" class="btn primary">Tastatur verbinden</button>
+      <button id="btn-demo" class="btn">Demo</button>
+      <button id="btn-float" class="btn" title="Tastatur als schwebendes Fenster über anderen Apps (z. B. monkeytype)">Schwebendes Fenster</button>
+      <button id="btn-settings" class="btn icon" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+    </div>
+    <div id="settings" class="settings" hidden>
+      <label>Tastaturlayout im System
+        <select id="host-layout">
+          <option value="auto">Automatisch</option>
+          <option value="de-mac">Deutsch (Mac)</option>
+          <option value="de-win">Deutsch (Windows/Linux)</option>
+          <option value="us">US (QWERTY)</option>
+        </select>
+        <span id="host-detected" class="muted"></span>
+      </label>
+      <label>Basis-Layer
+        <select id="base-layer"></select>
+      </label>
+      <label class="check"><input type="checkbox" id="hints"> Nächste Taste auf der Tastatur zeigen</label>
+      <div id="kb-info" class="kb-info muted"></div>
+      <button id="btn-lock" class="btn small" hidden>Tastatur wieder sperren</button>
+    </div>
+  </header>
+
+  <div id="unlock-banner" class="banner" hidden>
+    <div>
+      <b>Live-Anzeige freischalten.</b>
+      Vial gibt die gedrückten Tasten erst nach einem Entsperren heraus (Schutz gegen Keylogger).
+      Danach siehst du jede Taste – auch Layer-, Mod-Tap- und One-Shot-Tasten – selbst wenn das Fenster nicht im Vordergrund ist.
+      Bis dahin zeigt die App nur, was im fokussierten Fenster ankommt.
+    </div>
+    <div class="banner-actions">
+      <button id="btn-unlock" class="btn primary">Entsperren</button>
+      <button id="btn-unlock-later" class="btn">Später</button>
+    </div>
+  </div>
+
+  <main>
+    <section id="trainer" class="trainer">
+      <div id="config" class="config">
+        <div class="group">
+          <button data-set="punctuation:toggle">Satzzeichen</button>
+          <button data-set="numbers:toggle">Zahlen</button>
+          <button data-set="code:toggle" title="Klammern, Operatoren und Sonderzeichen – ideal für den Symbol-Layer">Code</button>
+        </div>
+        <span class="sep"></span>
+        <div class="group">
+          <button data-set="mode:time">Zeit</button>
+          <button data-set="mode:words">Wörter</button>
+        </div>
+        <span class="sep"></span>
+        <div class="group" id="cfg-time">
+          <button data-set="time:15">15</button><button data-set="time:30">30</button><button data-set="time:60">60</button><button data-set="time:120">120</button>
+        </div>
+        <div class="group" id="cfg-words" hidden>
+          <button data-set="words:10">10</button><button data-set="words:25">25</button><button data-set="words:50">50</button><button data-set="words:100">100</button>
+        </div>
+        <span class="sep"></span>
+        <div class="group">
+          <button data-set="lang:de">Deutsch</button>
+          <button data-set="lang:en">English</button>
+        </div>
+      </div>
+
+      <div id="test" class="test">
+        <div id="test-status" class="test-status"></div>
+        <div class="words-wrap">
+          <div id="caret" class="caret"></div>
+          <div id="words" class="words"></div>
+        </div>
+        <textarea id="words-input" class="words-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Eingabe"></textarea>
+        <div class="focus-hint">Klicke hier oder drücke eine Taste, um weiterzuschreiben</div>
+      </div>
+
+      <div id="result" class="result" hidden>
+        <div class="big">
+          <div><div class="label">wpm</div><div id="r-wpm" class="value"></div></div>
+          <div><div class="label">genauigkeit</div><div id="r-acc" class="value"></div></div>
+          <div id="r-best" class="best" hidden>Neue Bestleistung!</div>
+        </div>
+        <svg id="r-chart" class="chart" preserveAspectRatio="none"></svg>
+        <div class="small-stats">
+          <div><span class="label">test</span><span id="r-type"></span></div>
+          <div><span class="label">raw</span><span id="r-raw"></span></div>
+          <div title="richtig / falsch / zu viel / ausgelassen"><span class="label">zeichen</span><span id="r-chars"></span></div>
+          <div><span class="label">konstanz</span><span id="r-cons"></span></div>
+          <div><span class="label">zeit</span><span id="r-time"></span></div>
+        </div>
+        <div id="r-worst" class="worst"></div>
+        <div class="result-actions">
+          <button id="btn-again" class="btn primary">Nächster Test <kbd>Tab</kbd></button>
+          <button id="btn-heat" class="btn">Fehler-Heatmap ein/aus</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="kbd-panel" class="kbd-panel">
+      <div class="kbd-bar">
+        <div id="layers" class="layers"></div>
+        <div id="mods" class="mods"></div>
+      </div>
+      <div id="kbd" class="kbd"></div>
+      <div id="kbd-empty" class="kbd-empty">
+        <p>Verbinde deine Vial-Tastatur (Chrome/Edge), dann erscheinen hier dein Layout, deine Keymap und jede gedrückte Taste.</p>
+        <p class="muted">Ohne Tastatur zum Ausprobieren: <button class="link" onclick="HT.loadDemo()">Demo mit Halcyon Kyria laden</button></p>
+      </div>
+      <div id="hint" class="hint"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span><kbd>Tab</kbd> neuer Test</span>
+    <span><kbd>⌥</kbd>/<kbd>Strg</kbd> + <kbd>⌫</kbd> Wort löschen</span>
+    <span>Layer-Chip anklicken = Layer festhalten · Doppelklick = umbenennen</span>
+  </footer>
+
+  <div id="unlock-dialog" class="modal" hidden>
+    <div class="modal-box">
+      <h2>Tastatur entsperren</h2>
+      <p id="unlock-text"></p>
+      <div class="progress"><div id="unlock-progress"></div></div>
+      <button id="btn-unlock-cancel" class="btn">Abbrechen</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
