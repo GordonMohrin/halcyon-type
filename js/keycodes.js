@@ -272,7 +272,11 @@ export function charFor(hid, mods, host) {
 // ---------------------------------------------------------------------------
 // Labels
 
-function basicLabel(hid, host) {
+/**
+ * live: { mods, caps } — modifiers currently in effect, so the keyboard shows what each key types *now*
+ * (lowercase normally, uppercase / shifted symbols while Shift is held, Option/AltGr characters with Alt).
+ */
+function basicLabel(hid, host, live) {
   const info = BASIC.get(hid);
   if (MOD_KEYS[hid]) {
     const m = MOD_KEYS[hid];
@@ -281,12 +285,19 @@ function basicLabel(hid, host) {
   const entry = host.chars.get(hid);
   if (entry && hid !== 0x2C && !(hid >= 0x54 && hid <= 0x67 && hid !== 0x64)) {
     const base = entry[0];
-    const isLetter = /\p{L}/u.test(base) && base.toUpperCase() !== base;
-    if (isLetter) return { main: base.toUpperCase(), cls: 'k-letter', desc: `Buchstabe ${base.toUpperCase()}` };
-    return {
-      main: base, sub: entry[1] && entry[1] !== base ? entry[1] : undefined, alt: entry[2] || undefined,
-      cls: 'k-symbol', desc: `Zeichen ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`,
-    };
+    const isLetter = !!entry[1] && entry[1] !== base && entry[1] === base.toUpperCase();
+    const desc = isLetter
+      ? `Buchstabe ${base}`
+      : `Zeichen ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`;
+    const mods = live ? live.mods & 0xFF : 0;
+    const typing = mods & 0x66; // shift / alt change the character
+    if (typing) {
+      const ch = charFor(hid, mods, host);
+      if (ch) return { main: ch, cls: (isLetter ? 'k-letter' : 'k-symbol') + ' k-modded', desc };
+      if (!(mods & 0x99)) return { main: isLetter ? base : base, cls: (isLetter ? 'k-letter' : 'k-symbol') + ' k-dead', desc };
+    }
+    if (isLetter) return { main: live && live.caps ? base.toUpperCase() : base, cls: 'k-letter', desc };
+    return { main: base, sub: entry[1] && entry[1] !== base ? entry[1] : undefined, alt: entry[2] || undefined, cls: 'k-symbol', desc };
   }
   if (entry && hid >= 0x54) return { main: entry[0], sub: 'Num', cls: 'k-symbol', desc: `Ziffernblock ${entry[0]}` };
   if (info && info.label) {
@@ -301,16 +312,16 @@ function basicLabel(hid, host) {
 }
 
 /**
- * Keycap label for a keycode. ctx: { host, tapDances, customKeycodes }
+ * Keycap label for a keycode. ctx: { host, tapDances, customKeycodes }, live: { mods, caps } or null
  * Returns { main, sub?, cls, desc }.
  */
-export function labelFor(kc, ctx) {
+export function labelFor(kc, ctx, live = null) {
   const d = decode(kc);
   const host = ctx.host;
   switch (d.type) {
     case 'none': return { main: '', cls: 'k-none', desc: 'Keine Funktion' };
     case 'trns': return { main: '▽', cls: 'k-trns', desc: 'Transparent (Layer darunter)' };
-    case 'basic': return basicLabel(d.base, host);
+    case 'basic': return basicLabel(d.base, host, live);
     case 'mods': {
       const ch = charFor(d.base, d.mods, host);
       const baseL = basicLabel(d.base, host);
@@ -318,12 +329,12 @@ export function labelFor(kc, ctx) {
       return { main: modsSymbol(d.mods) + baseL.main, cls: 'k-combo', desc: `${modsName(d.mods)} + ${baseL.desc}` };
     }
     case 'modtap': {
-      const tap = basicLabel(d.base, host);
+      const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: modsSymbol(d.mods), cls: 'k-dual ' + tap.cls, dual: true,
         desc: `Tippen: ${tap.desc} · Halten: ${modsName(d.mods)}` };
     }
     case 'layertap': {
-      const tap = basicLabel(d.base, host);
+      const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: 'L' + d.layer, cls: 'k-dual ' + tap.cls, dual: true,
         desc: `Tippen: ${tap.desc} · Halten: Layer ${d.layer}` };
     }
@@ -339,7 +350,7 @@ export function labelFor(kc, ctx) {
     case 'td': {
       const td = ctx.tapDances && ctx.tapDances[d.index];
       if (td && td.onTap) {
-        const tap = labelFor(td.onTap, ctx);
+        const tap = labelFor(td.onTap, ctx, live);
         return { main: tap.main, sub: 'TD' + d.index, cls: 'k-dual ' + tap.cls, dual: !!td.onHold,
           desc: `Tap Dance ${d.index}: Tippen ${tap.desc}${td.onHold ? ' · Halten ' + labelFor(td.onHold, ctx).desc : ''}` };
       }

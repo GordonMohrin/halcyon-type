@@ -10,6 +10,7 @@ import { KeymapIndex } from '../js/lookup.js';
 import { HOST_LAYOUTS, labelFor, charFor, decode } from '../js/keycodes.js';
 import { execFileSync } from 'node:child_process';
 import { MockVialDevice } from './mock-vial.mjs';
+import { computeFingers } from '../js/hands.js';
 
 function xzCompress(bytes) {
   return new Uint8Array(execFileSync('python3', ['-I', '-c', 'import sys,lzma; sys.stdout.buffer.write(lzma.compress(sys.stdin.buffer.read()))'], { input: Buffer.from(bytes) }));
@@ -165,10 +166,39 @@ const posOf = (layer, kc) => {
   const lt = labelFor(parseKeycode('LT(3, KC_SPC)'), ctx);
   check('LT label', lt.main === '␣' && lt.sub === 'L3' && lt.dual);
   const mt = labelFor(parseKeycode('MT(MOD_RCTL, KC_QUOTE)'), ctx);
-  check('MT label (DE quote key = ä)', mt.main === 'Ä' && mt.dual, JSON.stringify(mt));
-  check('KC_Y label is Z on German', labelFor(parseKeycode('KC_Y'), ctx).main === 'Z');
+  check('MT label (DE quote key = ä)', mt.main === 'ä' && mt.dual, JSON.stringify(mt));
+  check('KC_Y label is z on German', labelFor(parseKeycode('KC_Y'), ctx).main === 'z');
+  check('label follows Shift', labelFor(parseKeycode('KC_Y'), ctx, { mods: 0x02 }).main === 'Z');
+  check('label follows Shift on symbols (DE 7 -> /)', labelFor(parseKeycode('KC_7'), ctx, { mods: 0x20 }).main === '/');
+  check('label follows Option (DE mac L -> @)', labelFor(parseKeycode('KC_L'), ctx, { mods: 0x04 }).main === '@');
+  check('label follows Caps', labelFor(parseKeycode('KC_A'), ctx, { mods: 0, caps: true }).main === 'A');
+  check('ß is a symbol with ? on shift', labelFor(parseKeycode('KC_MINS'), ctx).sub === '?');
   check('decode OSM', decode(parseKeycode('OSM(MOD_LSFT|MOD_LCTL)')).mods === 0x03);
   check('decode right-hand mods', decode(parseKeycode('MT(MOD_RSFT, KC_J)')).mods === 0x20);
+}
+
+// ---------------------------------------------------------------- fingers
+{
+  const all = parseVialLayout(demo.definition);
+  const placed = placeKeys(all.filter((k) => !k.encoder && k.layoutIndex === -1), []);
+  const { fingers, homing } = computeFingers(placed, demo.definition.matrix.rows);
+  const f = (name) => { const p = posOf(0, parseKeycode(name)); const x = fingers.get(p); return x && x.hand + '-' + x.finger; };
+  check('fingers: r = left index', f('KC_R') === 'L-index');
+  check('fingers: t = left index (inner column)', f('KC_T') === 'L-index');
+  check('fingers: e = left middle', f('KC_E') === 'L-middle');
+  check('fingers: s = left ring', f('KC_S') === 'L-ring');
+  check('fingers: a = left pinky', f('KC_A') === 'L-pinky');
+  check('fingers: o = right ring', f('KC_O') === 'R-ring');
+  check('fingers: backspace = right pinky', f('KC_BSPC') === 'R-pinky');
+  check('fingers: space on a thumb', /thumb$/.test(f('KC_SPC')));
+  check('homing on f and j', homing.has(posOf(0, parseKeycode('KC_F'))) && homing.has(posOf(0, parseKeycode('KC_J'))) && homing.size === 2);
+  // Corne: 3x6 + 3 thumbs, different matrix and KLE
+  const corne = JSON.parse(readFileSync(new URL('./fixtures/halcyon-corne.vial.json', import.meta.url), 'utf8'));
+  const cp = placeKeys(parseVialLayout(corne).filter((k) => !k.encoder && k.layoutIndex === -1), []);
+  const cf = computeFingers(cp, corne.matrix.rows).fingers;
+  const thumbs = [...cf.values()].filter((x) => x.finger === 'thumb').length;
+  check('corne: 6 thumb keys', thumbs === 6, thumbs);
+  check('corne: 2 homing keys', computeFingers(cp, corne.matrix.rows).homing.size === 2);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -20,8 +20,10 @@ function fontSizeFor(text, w) {
 }
 
 export class KeyboardView {
-  constructor(container) {
+  /** opts: { fontScale } */
+  constructor(container, opts = {}) {
     this.container = container;
+    this.fontScale = opts.fontScale ?? 1;
     this.keys = [];
     this.nodes = new Map();   // key.id -> { g, cap, main, sub, alt, key }
     this.byPos = new Map();   // "r,c" -> [key.id]
@@ -66,6 +68,7 @@ export class KeyboardView {
           }, g);
         }
         el('rect', { x: x + 6, y: y + h - 6, width: 0, height: 3, rx: 1.5, class: 'pending-bar' }, g);
+        el('rect', { x: x + w / 2 - 7, y: y + h - 9, width: 14, height: 3, rx: 1.5, class: 'homing' }, g);
       }
       const main = el('text', { x: x + w / 2, y: y + h / 2 + (key.encoder ? 7 : 2), class: 'main' }, g);
       const sub = el('text', { x: x + 7, y: y + 13, class: 'sub' }, g);
@@ -84,7 +87,26 @@ export class KeyboardView {
     }
     this.container.appendChild(svg);
     this.labelCache.clear();
-    this.setLayer(this.layer, 1 << this.layer, true);
+    this.setLayer(this.layer, 1 << this.layer, this.live, true);
+  }
+
+  /** Positions with a homing bump (index-finger home keys), like monkeytype's keymap. */
+  setHoming(positions) {
+    this.homing = positions;
+    this.setLayer(this.layer, this.mask, this.live, true); // rebuilds base classes incl. homing
+    this.refresh();
+  }
+
+  /** Short flash after a keystroke (monkeytype "react" style): kind = 'ok' | 'err'. */
+  flash(pos, kind) {
+    for (const id of this.byPos.get(pos) || []) {
+      const g = this.nodes.get(id).g;
+      g.classList.remove('flash-ok', 'flash-err');
+      g.getBoundingClientRect();
+      g.classList.add(kind === 'err' ? 'flash-err' : 'flash-ok');
+      clearTimeout(g._flashTimer);
+      g._flashTimer = setTimeout(() => g.classList.remove('flash-ok', 'flash-err'), 260);
+    }
   }
 
   /** Effective keycode at a position for display: transparent keys show what falls through. */
@@ -101,11 +123,15 @@ export class KeyboardView {
     return { kc: kc0 === KC_TRNS ? 0 : kc0, through: true };
   }
 
-  setLayer(layer, mask, force = false) {
+  /** live: { mods, caps } — labels show what keys type under the current modifiers. */
+  setLayer(layer, mask, live = null, force = false) {
     if (!this.kb) return;
-    if (!force && layer === this.layer && mask === this.mask) return;
+    const liveKey = live ? ((live.mods & 0xFF) | (live.caps ? 0x100 : 0)) : 0;
+    if (!force && layer === this.layer && mask === this.mask && liveKey === this.liveKey) return;
     this.layer = layer;
     this.mask = mask;
+    this.live = live;
+    this.liveKey = liveKey;
     const ctx = this.kb.ctx;
     for (const node of this.nodes.values()) {
       const key = node.key;
@@ -118,11 +144,11 @@ export class KeyboardView {
           const pair = this.kb.encoders?.[l + ',' + key.encoder.index];
           if (pair && pair[key.encoder.dir] !== KC_TRNS) { kc = pair[key.encoder.dir]; through = l !== layer; break; }
         }
-        label = kc !== null ? labelFor(kc, ctx) : { main: '', cls: 'k-none', desc: 'Encoder' };
+        label = kc !== null ? labelFor(kc, ctx, live) : { main: '', cls: 'k-none', desc: 'Encoder' };
       } else {
         const eff = this.effectiveKeycode(key.row, key.col, layer, mask);
         through = eff.through;
-        label = labelFor(eff.kc, ctx);
+        label = labelFor(eff.kc, ctx, live);
       }
       this.#applyLabel(node, label, through);
     }
@@ -132,7 +158,7 @@ export class KeyboardView {
     const main = label.main || '';
     const lines = main.split('\n');
     node.main.textContent = lines[0];
-    node.main.style.fontSize = fontSizeFor(lines[0], node.w) + 'px';
+    node.main.style.fontSize = fontSizeFor(lines[0], node.w) * this.fontScale + 'px';
     if (label.dual) {
       node.sub.textContent = '';
       node.alt.textContent = label.sub || '';
@@ -140,15 +166,17 @@ export class KeyboardView {
       node.sub.textContent = label.sub || '';
       node.alt.textContent = label.alt || '';
     }
-    node.g.setAttribute('class', ['key', node.key.encoder ? 'encoder' : '', label.cls || '', through ? 'through' : '', ...(node.state || [])].join(' ').trim());
-    node.baseClass = ['key', node.key.encoder ? 'encoder' : '', label.cls || '', through ? 'through' : ''].join(' ').trim();
+    const homing = this.homing && !node.key.encoder && this.homing.has(node.key.row + ',' + node.key.col) ? 'homing-key' : '';
+    node.baseClass = ['key', node.key.encoder ? 'encoder' : '', label.cls || '', through ? 'through' : '', homing].join(' ').trim();
+    node.g.setAttribute('class', [node.baseClass, ...(node.state || [])].join(' ').trim());
     node.title.textContent = label.desc || '';
     node.label = label;
   }
 
   #setState(node, states) {
     node.state = states;
-    node.g.setAttribute('class', [node.baseClass, ...states].join(' '));
+    const flash = ['flash-ok', 'flash-err'].filter((c) => node.g.classList.contains(c));
+    node.g.setAttribute('class', [node.baseClass, ...states, ...flash].join(' '));
   }
 
   /** keys: Map("r,c" -> { role, downAt, term }) from FirmwareModel.snapshot() or DOM fallback. */

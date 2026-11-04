@@ -1,0 +1,117 @@
+/* Halcyon für monkeytype — uses monkeytype's theme variables so it follows every theme.
+   Key look follows monkeytype's keymap (Keymap.tsx, GPL-3.0): sub-alt keys, sub legends,
+   main-colored next key, 250 ms main/error flash, bg-colored homing bars. */
+
+.hmt {
+  --hmt-scale: 1;
+  --hmt-main: var(--main-color, #e2b714);
+  --hmt-bg: var(--bg-color, #323437);
+  --hmt-sub: var(--sub-color, #646669);
+  --hmt-subalt: var(--sub-alt-color, #2c2e31);
+  --hmt-text: var(--text-color, #d1d0c5);
+  --hmt-error: var(--error-color, #ca4754);
+  width: min(100%, calc(720px * var(--hmt-scale)));
+  margin: 1.6rem auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font, "Roboto Mono", monospace);
+  color: var(--hmt-sub);
+  user-select: none;
+}
+
+.hmt [hidden] { display: none !important; }
+
+.hmt-bar { display: flex; justify-content: center; gap: 1.6rem; font-size: 0.75rem; min-height: 1.2rem; }
+.hmt-layers, .hmt-mods { display: flex; gap: 0.3rem; align-items: center; }
+.hmt-layer {
+  all: unset; cursor: pointer; width: 1.35rem; height: 1.35rem; border-radius: 0.3rem; text-align: center; line-height: 1.35rem;
+  color: var(--hmt-sub); background: transparent; font-size: 0.72rem; transition: color .12s, background .12s;
+}
+.hmt-layer.active { color: var(--hmt-text); background: var(--hmt-subalt); }
+.hmt-layer.shown { color: var(--hmt-bg); background: var(--hmt-main); }
+.hmt-layer.base:not(.shown) { box-shadow: inset 0 0 0 1px var(--hmt-sub); }
+.hmt-layer.pinned { outline: 1px dashed var(--hmt-main); outline-offset: 2px; }
+.hmt-mod { width: 1.35rem; height: 1.35rem; line-height: 1.35rem; text-align: center; border-radius: 0.3rem; font-size: 0.85rem; color: var(--hmt-sub); opacity: .55; transition: all .08s; }
+.hmt-mod.on { opacity: 1; color: var(--hmt-bg); background: var(--hmt-main); }
+.hmt-mod.oneshot { opacity: 1; color: var(--hmt-main); box-shadow: inset 0 0 0 1px var(--hmt-main); }
+
+.hmt-kbd { width: 100%; display: flex; justify-content: center; }
+.hmt .kbd-svg { width: 100%; height: auto; overflow: visible; }
+.hmt-hands { width: min(100%, calc(330px * var(--hmt-scale))); margin-top: 0.4rem; }
+.hmt .hands-svg { width: 100%; height: auto; display: block; }
+.hmt-hint { font-size: 0.75rem; min-height: 1rem; color: var(--hmt-sub); }
+.hmt-notice { display: flex; gap: 0.6rem; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.8rem; color: var(--hmt-text); max-width: 34rem; text-align: center; }
+.hmt-notice:empty { display: none; }
+.hmt-progress { width: 100%; height: 0.35rem; border-radius: 0.2rem; background: var(--hmt-subalt); overflow: hidden; }
+.hmt-progress > div { height: 100%; background: var(--hmt-main); transition: width .12s linear; }
+
+/* keys */
+.hmt .key .cap { fill: var(--hmt-subalt); stroke: transparent; stroke-width: 0; transition: fill .25s ease-out, stroke .1s; }
+.hmt .key text { fill: var(--hmt-sub); text-anchor: middle; dominant-baseline: middle; font-family: var(--font, "Roboto Mono", monospace); pointer-events: none; }
+.hmt .key .sub { font-size: 9px; text-anchor: start; dominant-baseline: auto; opacity: .75; }
+.hmt .key .alt { font-size: 9px; text-anchor: end; dominant-baseline: auto; opacity: .75; }
+.hmt .key .enc-dir { font-size: 10px; }
+.hmt .key .homing { fill: transparent; }
+.hmt .key.homing-key .homing { fill: var(--hmt-bg); }
+.hmt .key .pending-bar { fill: var(--hmt-bg); }
+.hmt .key .badge { display: none; }
+.hmt .key.k-none .cap { fill-opacity: .35; }
+.hmt .key.k-none text { display: none; }
+.hmt .key.through text { opacity: .45; }
+.hmt .key.k-modded .main { fill: var(--hmt-text); }
+.hmt .key.k-dead .main { opacity: .35; }
+
+.hmt .key.pressed .cap { fill: var(--hmt-main); transition: none; }
+.hmt .key.pressed text { fill: var(--hmt-bg); opacity: 1; }
+.hmt .key.pressed .homing { fill: var(--hmt-subalt); }
+.hmt .key.pressed.pending .cap { fill: color-mix(in srgb, var(--hmt-main) 45%, var(--hmt-subalt)); }
+.hmt .key.pressed.hold .cap { fill: var(--hmt-text); }
+.hmt .key.flash-ok .cap { fill: var(--hmt-main); transition: none; }
+.hmt .key.flash-err .cap { fill: var(--hmt-error); transition: none; }
+.hmt .key.flash-ok text, .hmt .key.flash-err text { fill: var(--hmt-bg); }
+
+.hmt .key.hint .cap { stroke: var(--hmt-main); stroke-width: 3; }
+.hmt .key.hint text { fill: var(--hmt-text); }
+.hmt .key.hint-layer .cap { stroke: var(--hmt-main); stroke-width: 2.2; stroke-dasharray: 5 4; }
+.hmt .key.hint-mod .cap { stroke: var(--hmt-text); stroke-width: 2.2; stroke-dasharray: 5 4; }
+.hmt .key.unlock .cap { stroke: var(--hmt-main); stroke-width: 3; fill: color-mix(in srgb, var(--hmt-main) 25%, var(--hmt-subalt)); }
+.hmt .key.unlock.pressed .cap { fill: var(--hmt-main); }
+
+/* hands */
+.hmt .hand .palm, .hmt .hand .finger { fill: var(--hmt-subalt); fill-opacity: .7; stroke: transparent; stroke-width: 0; transition: stroke .1s; }
+.hmt .hand .finger.target { stroke: var(--hmt-main); stroke-width: 3.5; fill: var(--hmt-bg); fill-opacity: 1; }
+.hmt .hand .finger.helper-layer { stroke: var(--hmt-main); stroke-width: 2.5; stroke-dasharray: 5 4; }
+.hmt .hand .finger.helper-mod { stroke: var(--hmt-text); stroke-width: 2.5; stroke-dasharray: 5 4; }
+
+/* monkeytype's own keymap is replaced while a Halcyon is shown */
+body.halcyon-hide-mt-keymap [data-ui-element="keymap"] { display: none !important; }
+
+/* control pill */
+.hmt-pill { position: fixed; right: 0.8rem; bottom: 0.8rem; z-index: 99999; font-family: var(--font, "Roboto Mono", monospace); font-size: 0.75rem; }
+.hmt-pill-btn {
+  all: unset; cursor: pointer; padding: 0.35rem 0.7rem; border-radius: 0.5rem; background: var(--sub-alt-color, #2c2e31);
+  color: var(--sub-color, #646669); opacity: .7; transition: opacity .15s, color .15s;
+}
+.hmt-pill-btn:hover { opacity: 1; color: var(--text-color, #d1d0c5); }
+.hmt-pill[data-state="live"] .hmt-pill-btn { color: var(--main-color, #e2b714); }
+.hmt-menu {
+  position: absolute; right: 0; bottom: calc(100% + 0.5rem); width: 19rem; padding: 0.9rem; border-radius: 0.6rem;
+  background: var(--bg-color, #323437); border: 2px solid var(--sub-alt-color, #2c2e31); color: var(--text-color, #d1d0c5);
+  display: flex; flex-direction: column; gap: 0.55rem; box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, .35);
+}
+.hmt-menu[hidden] { display: none; }
+.hmt-menu-title { color: var(--main-color, #e2b714); font-size: 0.85rem; }
+.hmt-menu-status { color: var(--sub-color, #646669); line-height: 1.4; }
+.hmt-menu-row { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.hmt-menu select, .hmt-menu input[type="range"] { font: inherit; color: var(--text-color, #d1d0c5); background: var(--sub-alt-color, #2c2e31); border: none; border-radius: 0.35rem; padding: 0.2rem 0.4rem; max-width: 11rem; }
+.hmt-check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
+.hmt-check input { accent-color: var(--main-color, #e2b714); }
+.hmt-btn, .hmt-notice .hmt-btn {
+  all: unset; cursor: pointer; padding: 0.3rem 0.7rem; border-radius: 0.4rem; background: var(--sub-alt-color, #2c2e31);
+  color: var(--text-color, #d1d0c5); font-family: inherit; font-size: 0.75rem; transition: filter .12s;
+}
+.hmt-btn:hover { filter: brightness(1.2); }
+.hmt-btn.primary { background: var(--main-color, #e2b714); color: var(--bg-color, #323437); }
+.hmt-muted { color: var(--sub-color, #646669); }

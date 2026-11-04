@@ -149,7 +149,7 @@ async function applyHostLayout() {
   $('#host-detected').textContent = app.hostId === 'auto' ? `(erkannt: ${app.host.name})` : '';
   if (app.kb) {
     rebuildIndex();
-    view.setLayer(view.layer, view.mask, true);
+    view.setLayer(view.layer, view.mask, view.live, true);
     updateHint(app.lastExpect);
   }
 }
@@ -333,7 +333,8 @@ function render() {
   const focused = document.hasFocus();
   const layer = app.previewLayer ?? snap.displayLayer;
   const mask = snap.activeMask | (1 << snap.defaultLayer) | (1 << layer);
-  view.setLayer(layer, mask);
+  const liveMods = snap.mods | snap.oneShotMods | dom.mods;
+  view.setLayer(layer, mask, { mods: liveMods, caps: snap.capsWord || (focused && dom.capsLock) || snap.capsLock });
   view.setPressed(snap.keys);
   // DomKeyTracker clears itself on blur, so its mods only ever reflect the focused window.
   renderMods(snap.mods | dom.mods, snap.oneShotMods, (focused && dom.capsLock) || snap.capsLock, snap.capsWord);

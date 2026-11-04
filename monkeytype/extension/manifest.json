@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Halcyon für monkeytype",
+  "version": "0.1.0",
+  "description": "Zeigt deine Vial-Tastatur (splitkb Halcyon) live in monkeytype: Layer, Modifier, nächste Taste, Finger.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://monkeytype.com/*"
+      ],
+      "js": [
+        "halcyon-monkeytype.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    }
+  ]
+}

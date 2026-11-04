@@ -1,11 +1,53 @@
 # Halcyon Type
 
-Ein Tipptrainer im Stil von monkeytype mit Live-Tastatur für Vial-Tastaturen – gebaut für die
-splitkb **Halcyon**-Reihe (Kyria, Corne, Lily58, Elora, Ferris, Sofle), funktioniert aber mit jeder Vial-Firmware.
+Live-Anzeige deiner Vial-Tastatur für **monkeytype.com**, gebaut für die splitkb **Halcyon**-Reihe
+(Kyria, Corne, Lily58, Elora, Ferris, Sofle). Funktioniert mit jeder Vial-Firmware.
 
-Die App liest Layout, Keymap, Layout-Optionen (Halcyon-Module), Encoder, Tap-Dances und den Tapping Term
-direkt aus der Tastatur. Sie zeigt live jede gedrückte Taste, den aktiven Layer und alle Modifier,
-auch wenn sie per Mod-Tap, One-Shot oder Layer-Taste kommen.
+Du tippst ganz normal im echten monkeytype mit deinem Account, Ergebnisse und Bestleistungen landen wie immer dort.
+Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modifiern, direkt aus der Firmware gelesen:
+
+- jede gedrückte Taste live, auch Layer-, Mod-Tap- und One-Shot-Tasten
+- der aktive Layer schaltet die Beschriftung um; bei gehaltenem Shift oder Option zeigen die Tasten, was sie gerade tippen
+- die **nächste Taste** ist in monkeytypes Hauptfarbe umrandet; Layer- und Shift-Tasten, die dafür nötig sind, gestrichelt
+- **Hände** darunter mit dem Finger, der die nächste Taste drücken sollte
+- kurzes Aufblinken nach jedem Anschlag (richtig/falsch) wie bei monkeytypes eigener Keymap
+- Farben und Schrift kommen aus deinem monkeytype-Theme
+
+## In monkeytype installieren
+
+**Variante A – Chrome-Erweiterung** (empfohlen)
+1. `chrome://extensions` öffnen und oben rechts den **Entwicklermodus** einschalten.
+2. **Entpackte Erweiterung laden** und den Ordner `monkeytype/extension` aus diesem Repo wählen.
+3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Halcyon**: anklicken, **Tastatur verbinden**, die Halcyon wählen.
+4. **Entsperren**: Die App zeigt die Tasten, die du halten musst (Halcyon Kyria ab Werk **T + Y**, ca. 6 s).
+   Solange blockiert sie die Eingabe in monkeytype, damit nichts im Test landet.
+
+**Variante B – Userscript**: `monkeytype/halcyon-monkeytype.user.js` in Tampermonkey oder Violentmonkey installieren.
+
+Ab dann verbindet sich die Tastatur beim Öffnen von monkeytype automatisch. Das Entsperren gilt bis zum Abstecken.
+Im Menü **⌨ Halcyon** stellst du außerdem ein:
+- Systemlayout (Deutsch Mac/Windows, US)
+- Basis-Layer
+- Hände, Hinweise und Layer-Leiste an oder aus
+- Encoder und Module zeigen
+- monkeytypes eigene Keymap ausblenden
+- Größe
+
+Nach Änderungen am Code: `node tools/build-monkeytype.mjs`, dann unter `chrome://extensions` die Erweiterung neu laden.
+
+## Lizenz
+
+GPL-3.0-or-later, siehe [LICENSE](LICENSE). Aussehen und Verhalten der Tastatur sind an monkeytypes Keymap angelehnt
+([monkeytypegame/monkeytype](https://github.com/monkeytypegame/monkeytype), GPL-3.0):
+- `sub-alt`-Tasten und `sub`-Beschriftung
+- nächste Taste in der Hauptfarbe
+- 250 ms Treffer-/Fehler-Blinken
+- Homing-Striche auf den Zeigefinger-Tasten
+
+## Eigenständige Version (ohne monkeytype)
+
+Zusätzlich gibt es einen eigenen Tipptrainer mit derselben Tastatur-Anzeige (Fehler-Heatmap, Code-Modus,
+schwebendes Fenster).
 
 ## Starten
 
@@ -73,7 +115,11 @@ Reines HTML/CSS/JS ohne Build-Schritt und ohne Abhängigkeiten. Code und Bezeich
 | `js/lookup.js` | Zeichen → Taste/Layer/Modifier (Hinweise, Heatmap), DOM-Code → Taste |
 | `js/keyboard-view.js` | SVG-Tastatur |
 | `js/typing.js`, `js/words.js` | Tipptest und Wortlisten |
-| `js/main.js` | Verbindung, Entsperren, Polling, UI |
+| `js/hands.js` | Finger-Zuordnung aus der Geometrie und Hände-Anzeige |
+| `js/main.js` | eigenständige App: Verbindung, Entsperren, Polling, UI |
+| `monkeytype/overlay.js`, `overlay.css` | Overlay für monkeytype.com |
+| `tools/build-monkeytype.mjs` | bündelt das Overlay zu Erweiterung und Userscript |
+| `tools/mt-fixture.html` | Nachbildung von monkeytypes Test-DOM zum lokalen Testen |
 
 Tests (Node ≥ 20, Python 3 für die Testdaten):
 
@@ -81,6 +127,7 @@ Tests (Node ≥ 20, Python 3 für die Testdaten):
 node tools/test-app.mjs   # Protokoll gegen simulierte Vial-Firmware, Layout, Zustandsmodell, Labels
 node tools/test-xz.mjs    # XZ-Decoder gegen Pythons lzma
 node tools/build-demo.mjs # demo/halcyon-kyria.json neu erzeugen
+node tools/build-monkeytype.mjs  # Erweiterung + Userscript bauen
 ```
 
 Die Halcyon-Kyria-Dateien in `tools/fixtures/` stammen aus
