@@ -57,7 +57,7 @@ for (const file of order) {
   if (file === entry) {
     src = src.replace('/*DEMO_DATA*/ null', demo).replace("/*CSS_TEXT*/ ''", JSON.stringify(css));
   }
-  out += `// ---- ${relative(root, file)}\nconst ${m.id} = (() => {\n${imports}\n${src}\nreturn { ${m.exports.join(', ')} };\n})();\n`;
+  out += `// ---- ${relative(root, file).replaceAll('\\', '/')}\nconst ${m.id} = (() => {\n${imports}\n${src}\nreturn { ${m.exports.join(', ')} };\n})();\n`;
 }
 
 const banner = `/*!

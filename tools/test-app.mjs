@@ -9,11 +9,12 @@ import { FirmwareModel } from '../js/state.js';
 import { KeymapIndex } from '../js/lookup.js';
 import { HOST_LAYOUTS, labelFor, charFor, decode } from '../js/keycodes.js';
 import { execFileSync } from 'node:child_process';
+const PYTHON = process.platform === 'win32' ? 'python' : 'python3';
 import { MockVialDevice } from './mock-vial.mjs';
 import { computeFingers } from '../js/hands.js';
 
 function xzCompress(bytes) {
-  return new Uint8Array(execFileSync('python3', ['-I', '-c', 'import sys,lzma; sys.stdout.buffer.write(lzma.compress(sys.stdin.buffer.read()))'], { input: Buffer.from(bytes) }));
+  return new Uint8Array(execFileSync(PYTHON, ['-I', '-c', 'import sys,lzma; sys.stdout.buffer.write(lzma.compress(sys.stdin.buffer.read()))'], { input: Buffer.from(bytes) }));
 }
 import { parseKeycode } from './keycode-names.mjs';
 

@@ -5,14 +5,16 @@
 // Fixtures are written to a temp folder (override with XZ_FIXTURE_DIR / VIAL_JSON).
 
 import { execFileSync } from 'node:child_process';
+const PYTHON = process.platform === 'win32' ? 'python' : 'python3';
 import { mkdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { xzDecompress } from '../js/xz.js';
 
-const SCRATCH = '/private/tmp/claude-501/-Users-me-claude-workspace/3c9da94d-f227-45d7-8aa4-d6ee6fafe292/scratchpad';
-const FIXTURE_DIR = process.env.XZ_FIXTURE_DIR || join(SCRATCH, 'xz-fixtures');
-const VIAL_JSON = process.env.VIAL_JSON || join(SCRATCH, 'hlc', 'kyria-vial.json');
+const FIXTURE_DIR = process.env.XZ_FIXTURE_DIR || join(tmpdir(), 'halcyon-xz-fixtures');
+const VIAL_JSON = process.env.VIAL_JSON || fileURLToPath(new URL('./fixtures/halcyon-kyria.vial.json', import.meta.url));
 
 // Python writes <name>.raw / <name>.<variant>.xz files plus manifest.json.
 // Argument 1: output folder, argument 2: Vial JSON source.
@@ -105,7 +107,7 @@ with open(os.path.join(out_dir, 'manifest.json'), 'w') as f:
 `;
 
 mkdirSync(FIXTURE_DIR, { recursive: true });
-execFileSync('python3', ['-I', '-c', PYTHON_FIXTURES, FIXTURE_DIR, VIAL_JSON], {
+execFileSync(PYTHON, ['-I', '-c', PYTHON_FIXTURES, FIXTURE_DIR, VIAL_JSON], {
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 const cases = JSON.parse(readFileSync(join(FIXTURE_DIR, 'manifest.json'), 'utf8'));
