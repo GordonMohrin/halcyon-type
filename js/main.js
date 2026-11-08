@@ -3,7 +3,7 @@
 import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } from './hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } from './kle.js';
 import { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } from './keycodes.js';
-import { FirmwareModel, DomKeyTracker } from './state.js';
+import { FirmwareModel, DomKeyTracker, lockedSnapshot } from './state.js';
 import { KeyboardView } from './keyboard-view.js';
 import { KeymapIndex } from './lookup.js';
 import { TypingTest } from './typing.js';
@@ -53,6 +53,7 @@ const app = {
   model: null,
   index: null,
   matrix: false,         // live matrix polling active
+  fw: null,              // layer state reported by the firmware while locked
   pollToken: 0,
   previewLayer: null,
   hint: null,
@@ -91,11 +92,13 @@ function updateStatus() {
     setStatus('Demo · ' + kbName(), 'demo');
   } else if (app.matrix) {
     setStatus(kbName() + ' · live', 'live');
+  } else if (app.vial?.layerReport) {
+    setStatus(kbName() + ' · gesperrt, Layer von der Firmware', 'locked');
   } else {
     setStatus(kbName() + ' · gesperrt (nur Fokus-Modus)', 'locked');
   }
   show($('#btn-connect'), app.source !== 'hid');
-  show($('#unlock-banner'), app.source === 'hid' && !app.matrix && !app.vial?.unlocked && !store.get('unlockDismissed', false));
+  show($('#unlock-banner'), app.source === 'hid' && !app.matrix && !app.vial?.unlocked && !app.vial?.layerReport && !store.get('unlockDismissed', false));
   show($('#btn-lock'), app.source === 'hid' && app.vial?.unlocked);
   show($('#kbd-empty'), !app.kb);
 }
@@ -174,7 +177,7 @@ async function connect(device) {
       name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
       encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
     });
-    if (vial.unlocked) startPolling();
+    pollForState();
     updateStatus();
   } catch (err) {
     console.error(err);
@@ -222,18 +225,46 @@ async function loadDemo() {
 
 // ------------------------------------------------------------------ live matrix polling
 
+/** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
+function pollForState() {
+  if (app.vial?.unlocked) startPolling();
+  else if (app.vial?.layerReport) startLayerPolling();
+  else stopPolling();
+}
+
 function startPolling() {
   stopPolling();
   app.matrix = true;
+  pollLoop(async (current) => {
+    const pressed = await app.vial.matrixPoll();
+    if (current() && app.model.update(pressed, performance.now())) render();
+  });
+  updateStatus();
+}
+
+function startLayerPolling() {
+  stopPolling();
+  let last = '';
+  pollLoop(async (current) => {
+    const fw = await app.vial.layerStatePoll();
+    if (!current() || !fw) return;
+    const key = JSON.stringify(fw);
+    if (key === last) return;
+    last = key;
+    app.fw = fw;
+    render();
+  });
+}
+
+function pollLoop(step) {
   const token = ++app.pollToken;
   let failures = 0;
   (async () => {
     while (app.pollToken === token) {
       const t0 = performance.now();
       try {
-        const pressed = await app.vial.matrixPoll();
+        await step(() => app.pollToken === token);
         failures = 0;
-        if (app.model.update(pressed, performance.now())) render();
       } catch (err) {
         if (app.pollToken !== token) return;
         if (++failures > 8) {
@@ -246,12 +277,12 @@ function startPolling() {
       await ticker.wait(Math.max(1, POLL_MS - (performance.now() - t0)));
     }
   })();
-  updateStatus();
 }
 
 function stopPolling() {
   app.pollToken++;
   app.matrix = false;
+  app.fw = null;
   if (app.model) { app.model.update([], performance.now()); }
 }
 
@@ -267,6 +298,7 @@ async function runUnlock() {
   const text = $('#unlock-text');
   await vial.refreshUnlockStatus();
   if (vial.unlocked) { startPolling(); return; }
+  stopPolling(); // the firmware answers nothing else while unlocking
   view.setUnlockKeys(vial.unlockKeys);
   const names = vial.unlockKeys.map(([r, c]) => keyNameAt(r, c)).join(' + ');
   text.textContent = `Halte ${vial.unlockKeys.length > 1 ? 'gleichzeitig' : ''} ${names} gedrückt, bis der Balken voll ist (etwa 6 Sekunden). Die Tasten sind auf der Tastatur unten markiert.`;
@@ -293,7 +325,7 @@ async function runUnlock() {
   unlockAbort = null;
   dlg.hidden = true;
   view.setUnlockKeys(null);
-  if (vial.unlocked) startPolling();
+  pollForState();
   updateStatus();
 }
 
@@ -306,29 +338,12 @@ function keyNameAt(r, c) {
 
 // ------------------------------------------------------------------ rendering of live state
 
-function domSnapshot() {
-  // Fallback without matrix access: map focused DOM key events to physical keys.
-  const keys = new Map();
-  let shownLayer = -1;
-  const base = app.model.defaultLayer;
-  for (const code of dom.codes) {
-    const hits = app.index.positionsForCode(code, [view.layer, base]);
-    if (!hits.length) continue;
-    keys.set(hits[0].pos, { role: 'active' });
-    if (hits[0].layer !== base && !/Shift|Control|Alt|Meta/.test(code)) shownLayer = Math.max(shownLayer, hits[0].layer);
-  }
-  const mask = (1 << base) | (shownLayer >= 0 ? 1 << shownLayer : 0);
-  return {
-    activeMask: mask, displayLayer: shownLayer >= 0 ? shownLayer : base, defaultLayer: base,
-    mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
-  };
-}
-
 let lastSnap = null;
 
 function render() {
   if (!app.kb) return;
-  const snap = app.matrix ? app.model.snapshot() : domSnapshot();
+  const snap = app.matrix ? app.model.snapshot()
+    : lockedSnapshot({ dom, index: app.index, viewLayer: view.layer, baseLayer: app.model.defaultLayer, fw: app.fw });
   lastSnap = snap;
   const focused = document.hasFocus();
   const layer = app.previewLayer ?? snap.displayLayer;
@@ -640,6 +655,7 @@ function bindEvents() {
     stopPolling();
     await app.vial.lock();
     store.set('unlockDismissed', false);
+    pollForState();
     updateStatus();
     render();
   });

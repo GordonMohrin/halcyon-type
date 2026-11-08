@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { HidTransport, VialKeyboard } from '../js/hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys } from '../js/kle.js';
-import { FirmwareModel } from '../js/state.js';
+import { FirmwareModel, lockedSnapshot } from '../js/state.js';
 import { KeymapIndex } from '../js/lookup.js';
 import { HOST_LAYOUTS, labelFor, charFor, decode } from '../js/keycodes.js';
 import { execFileSync } from 'node:child_process';
@@ -69,6 +69,23 @@ const posOf = (layer, kc) => {
   check('matrix multi-byte columns', JSON.stringify(p2) === JSON.stringify(['0,0', '2,3', '7,11']), JSON.stringify(p2));
   await kb.lock();
   check('lock', (await kb.matrixPoll()).length === 0);
+  check('no layer report from plain firmware', kb.layerReport === false && (await kb.layerStatePoll()) === null);
+  await t.close();
+}
+
+// layer state from firmware with layer_report.c, readable while locked
+{
+  const definitionXz = readFileSync(new URL('./fixtures/halcyon-kyria.def.xz', import.meta.url));
+  const dev = new MockVialDevice(demo, { definitionXz, layerReport: true });
+  const t = new HidTransport(dev);
+  await t.open();
+  const kb = new VialKeyboard(t, dev.productName);
+  await kb.load();
+  check('layer report detected', kb.layerReport === true && !kb.unlocked);
+  dev.fw = { layers: (1 << 4) | (1 << 3), defaultLayers: 1, mods: 0x02, oneShotMods: 0x04, flags: 3 };
+  const fw = await kb.layerStatePoll();
+  check('layer state while locked', fw.layers === 0x18 && fw.defaultLayers === 1 && fw.mods === 2 && fw.oneShotMods === 4 && fw.capsWord && fw.capsLock,
+    JSON.stringify(fw));
   await t.close();
 }
 
@@ -158,6 +175,17 @@ const posOf = (layer, kc) => {
   check('shift on opposite hand', zShiftSide === (keyX.get(Z.target) < placed.width / 2));
   const one = idx.pathFor('1');
   check('path 1 via layer 4', one && one.layer === 4 && one.layerKeys.length === 1);
+
+  const dom = { codes: new Set(), capsLock: false };
+  const fw = { layers: 1 << 4, defaultLayers: 1, mods: 0x02, oneShotMods: 0, capsWord: false, capsLock: false };
+  let snap = lockedSnapshot({ dom, index: idx, viewLayer: 0, baseLayer: 0, fw });
+  check('locked + firmware: layer shown before any key types', snap.displayLayer === 4 && snap.mods === 0x02);
+  check('locked + firmware: layer key lit', snap.keys.get(one.layerKeys[0])?.role === 'hold', JSON.stringify([...snap.keys]));
+  dom.codes.add('Digit1');
+  snap = lockedSnapshot({ dom, index: idx, viewLayer: 4, baseLayer: 0, fw });
+  check('locked + firmware: typed key on layer', snap.keys.get(one.target)?.role === 'active');
+  snap = lockedSnapshot({ dom: { codes: new Set(), capsLock: false }, index: idx, viewLayer: 0, baseLayer: 0, fw: null });
+  check('locked without firmware report: base layer', snap.displayLayer === 0 && snap.keys.size === 0);
   check('space found', !!idx.pathFor(' '));
   check('backspace found', !!idx.pathFor('\b'));
   check('DE: S(KC_7) types /', charFor(0x24, 0x02, host) === '/');

@@ -9,7 +9,9 @@ export const RAW_HID_FILTER = { usagePage: 0xff60, usage: 0x61 };
 const MSG_LEN = 32;
 
 const VIA = { PROTOCOL_VERSION: 0x01, GET_KEYBOARD_VALUE: 0x02, LAYER_COUNT: 0x11, KEYMAP_GET_BUFFER: 0x12, VIAL_PREFIX: 0xfe };
-const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03 };
+// LAYER_STATE is not part of VIA: firmware with layer_report.c answers it, also while locked.
+const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03, LAYER_STATE: 0x48 };
+const VIA_UNHANDLED = 0xff;
 const VIAL = {
   KEYBOARD_ID: 0x00, GET_SIZE: 0x01, GET_DEF: 0x02, GET_ENCODER: 0x03, UNLOCK_STATUS: 0x05, UNLOCK_START: 0x06,
   UNLOCK_POLL: 0x07, LOCK: 0x08, QMK_SETTINGS_GET: 0x0a, DYNAMIC_ENTRY_OP: 0x0d,
@@ -160,6 +162,7 @@ export class VialKeyboard {
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
+    this.layerReport = (await this.layerStatePoll().catch(() => null)) !== null;
     onProgress(1, 'Fertig');
     return this;
   }
@@ -248,6 +251,17 @@ export class VialKeyboard {
   async lock() {
     await this.t.request([VIA.VIAL_PREFIX, VIAL.LOCK]);
     this.unlocked = false;
+  }
+
+  /**
+   * Layer and modifier state as the firmware sees it, no unlock needed. Only firmware with the
+   * Halcyon Type extension (layer_report.c) answers; others return null.
+   * { layers, defaultLayers (bit masks), mods, oneShotMods, capsWord, capsLock }
+   */
+  async layerStatePoll() {
+    const d = await this.t.request([VIA.GET_KEYBOARD_VALUE, VIA_VALUE.LAYER_STATE], { timeout: 250, retries: 1 });
+    if (d[0] === VIA_UNHANDLED || d[0] !== VIA.GET_KEYBOARD_VALUE || d[1] !== VIA_VALUE.LAYER_STATE || d[2] < 1) return null;
+    return { layers: be32(d, 3), defaultLayers: be32(d, 7), mods: d[11], oneShotMods: d[12], capsWord: !!(d[13] & 1), capsLock: !!(d[13] & 2) };
   }
 
   /** Current switch matrix as an array of rows, each a Uint8Array(cols) of 0/1. Requires unlock. */

@@ -89,6 +89,17 @@ Ohne Picture-in-Picture: <http://localhost:8137/?view=keyboard> in einem eigenen
 - Layer-Chips: **Klick** hält einen Layer zur Ansicht fest, **Doppelklick** benennt ihn um.
 - **Tastatur wieder sperren**: Vial-Unlock zurücknehmen.
 
+## Gesperrt tippen mit Layer-Anzeige
+
+Die Keymap mit allen Layern liest die App immer direkt aus der Tastatur, auch gesperrt. Gesperrt fehlt nur,
+welche Taste gerade gedrückt ist. Tasten mit Zeichen sieht die App über monkeytype, reine Layer-Tasten (MO, LT …) nicht.
+
+Firmware mit [`layer_report.c`](https://github.com/GordonMohrin/qmk_userspace/blob/halcyon/keyboards/splitkb/halcyon/elora/keymaps/gordon/layer_report.c)
+meldet zusätzlich aktiven Layer, Modifier, One-Shot-Mods und Caps Word, ohne Entsperren und ohne preiszugeben,
+welche Tasten gedrückt sind. Dann zeigt die App gesperrt den Layer, sobald du die Layer-Taste hältst
+(Status „gesperrt · Layer“). Für deine eigene Firmware: die Datei in den Keymap-Ordner kopieren und
+`SRC += layer_report.c` in `rules.mk` eintragen.
+
 ## Grenzen
 
 - Die App bildet QMKs Logik für Layer, Mod-Tap und Layer-Tap (Tapping Term, Permissive Hold,

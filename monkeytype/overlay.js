@@ -7,7 +7,7 @@
 import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } from '../js/hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } from '../js/kle.js';
 import { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } from '../js/keycodes.js';
-import { FirmwareModel, DomKeyTracker } from '../js/state.js';
+import { FirmwareModel, DomKeyTracker, lockedSnapshot } from '../js/state.js';
 import { KeyboardView } from '../js/keyboard-view.js';
 import { KeymapIndex } from '../js/lookup.js';
 import { computeFingers, HandsView } from '../js/hands.js';
@@ -55,6 +55,7 @@ class HalcyonMonkeytype {
     this.source = 'none';
     this.kb = null;
     this.matrix = false;
+    this.fw = null; // layer state reported by the firmware while locked
     this.pollToken = 0;
     this.previewLayer = null;
     this.lastPressed = null;
@@ -162,12 +163,15 @@ class HalcyonMonkeytype {
   #statusText() {
     if (this.source === 'none') return 'Keine Tastatur verbunden';
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
-    if (this.matrix) return 'Live – jede Taste, Layer und Modifier';
-    return 'Gesperrt – nur Tasten mit Zeichen sichtbar. Entsperren für Layer & Mod-Taps.';
+    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
+    if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
+    if (this.vial?.layerReport) return 'Gesperrt – Layer und Modifier meldet die Firmware, Tasten kommen aus monkeytype. ' + keymap;
+    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken) '
+      + 'oder mit der Firmware-Erweiterung layer_report.c. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : this.fw ? 'gesperrt · Layer' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -184,8 +188,8 @@ class HalcyonMonkeytype {
         h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
       return;
     }
-    if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
-      n.append(h('span', {}, 'Für Layer-, Mod-Tap- und One-Shot-Tasten Vial entsperren.'),
+    if (this.source === 'hid' && !this.matrix && !this.vial?.layerReport && !store.get('unlockDismissed', false)) {
+      n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
         h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
         h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
     }
@@ -297,7 +301,7 @@ class HalcyonMonkeytype {
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
         encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
       });
-      if (vial.unlocked) this.startPolling();
+      this.#pollForState();
       this.#updateStatus();
     } catch (err) {
       console.error('[halcyon]', err);
@@ -329,22 +333,22 @@ class HalcyonMonkeytype {
     this.setupKeyboard(DEMO_DATA);
   }
 
-  startPolling() {
-    this.stopPolling();
-    this.matrix = true;
+  /** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
+  #pollForState() {
+    if (this.vial?.unlocked) this.startPolling();
+    else if (this.vial?.layerReport) this.startLayerPolling();
+    else this.stopPolling();
+  }
+
+  #pollLoop(step) {
     const token = ++this.pollToken;
     let failures = 0;
     (async () => {
       while (this.pollToken === token) {
         const t0 = performance.now();
         try {
-          const pressed = await this.vial.matrixPoll();
+          await step(() => this.pollToken === token);
           failures = 0;
-          const before = new Set(this.model.held.keys());
-          if (this.model.update(pressed, performance.now())) {
-            for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
-            this.render();
-          }
         } catch (err) {
           if (this.pollToken !== token) return;
           if (++failures > 8) { this.stopPolling(); this.#updateStatus(); return; }
@@ -352,12 +356,45 @@ class HalcyonMonkeytype {
         await this.ticker.wait(Math.max(1, POLL_MS - (performance.now() - t0)));
       }
     })();
+  }
+
+  startPolling() {
+    this.stopPolling();
+    this.matrix = true;
+    this.#pollLoop(async (current) => {
+      const pressed = await this.vial.matrixPoll();
+      if (!current()) return;
+      const before = new Set(this.model.held.keys());
+      if (this.model.update(pressed, performance.now())) {
+        for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
+        this.render();
+      }
+    });
     this.#updateStatus();
+  }
+
+  startLayerPolling() {
+    this.stopPolling();
+    let last = '';
+    this.#pollLoop(async (current) => {
+      const fw = await this.vial.layerStatePoll();
+      if (!current() || !fw) return;
+      const key = JSON.stringify(fw);
+      if (key === last) return;
+      const first = !this.fw;
+      last = key;
+      this.fw = fw;
+      const base = fw.defaultLayers ? 31 - Math.clz32(fw.defaultLayers) : 0;
+      if (base !== this.model.defaultLayer && base < this.kb.layerCount) this.setBaseLayer(base);
+      else this.render();
+      if (first) this.#updateStatus();
+    });
   }
 
   stopPolling() {
     this.pollToken++;
     this.matrix = false;
+    this.fw = null;
     this.model?.update([], performance.now());
   }
 
@@ -365,6 +402,7 @@ class HalcyonMonkeytype {
     this.stopPolling();
     await this.vial.lock();
     store.set('unlockDismissed', false);
+    this.#pollForState();
     this.render();
     this.#updateStatus();
   }
@@ -374,6 +412,7 @@ class HalcyonMonkeytype {
     if (!vial || this.unlocking) return;
     await vial.refreshUnlockStatus();
     if (vial.unlocked) { this.startPolling(); return; }
+    this.stopPolling(); // the firmware answers nothing else while unlocking
     // Holding the unlock keys would type into the test: swallow keys while unlocking.
     const block = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
     for (const t of ['keydown', 'keypress', 'keyup', 'beforeinput', 'input']) window.addEventListener(t, block, true);
@@ -398,31 +437,16 @@ class HalcyonMonkeytype {
       this.unlocking = null;
       this.view.setUnlockKeys(null);
     }
-    if (vial.unlocked) this.startPolling();
+    this.#pollForState();
     this.#updateStatus();
   }
 
   // ---------------------------------------------------------------- live state
 
-  #domSnapshot() {
-    const keys = new Map();
-    let shown = -1;
-    const base = this.model.defaultLayer;
-    for (const code of this.dom.codes) {
-      const hits = this.index.positionsForCode(code, [this.view.layer, base]);
-      if (!hits.length) continue;
-      keys.set(hits[0].pos, { role: 'active' });
-      if (hits[0].layer !== base && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hits[0].layer);
-    }
-    return {
-      activeMask: (1 << base) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : base, defaultLayer: base,
-      mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: this.dom.capsLock, keys,
-    };
-  }
-
   render() {
     if (!this.kb) return;
-    const snap = this.matrix ? this.model.snapshot() : this.#domSnapshot();
+    const snap = this.matrix ? this.model.snapshot()
+      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, fw: this.fw });
     this.snap = snap;
     const layer = this.previewLayer ?? snap.displayLayer;
     const mask = snap.activeMask | (1 << snap.defaultLayer) | (1 << layer);

@@ -938,7 +938,9 @@ const RAW_HID_FILTER = { usagePage: 0xff60, usage: 0x61 };
 const MSG_LEN = 32;
 
 const VIA = { PROTOCOL_VERSION: 0x01, GET_KEYBOARD_VALUE: 0x02, LAYER_COUNT: 0x11, KEYMAP_GET_BUFFER: 0x12, VIAL_PREFIX: 0xfe };
-const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03 };
+// LAYER_STATE is not part of VIA: firmware with layer_report.c answers it, also while locked.
+const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03, LAYER_STATE: 0x48 };
+const VIA_UNHANDLED = 0xff;
 const VIAL = {
   KEYBOARD_ID: 0x00, GET_SIZE: 0x01, GET_DEF: 0x02, GET_ENCODER: 0x03, UNLOCK_STATUS: 0x05, UNLOCK_START: 0x06,
   UNLOCK_POLL: 0x07, LOCK: 0x08, QMK_SETTINGS_GET: 0x0a, DYNAMIC_ENTRY_OP: 0x0d,
@@ -1089,6 +1091,7 @@ class VialKeyboard {
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
+    this.layerReport = (await this.layerStatePoll().catch(() => null)) !== null;
     onProgress(1, 'Fertig');
     return this;
   }
@@ -1177,6 +1180,17 @@ class VialKeyboard {
   async lock() {
     await this.t.request([VIA.VIAL_PREFIX, VIAL.LOCK]);
     this.unlocked = false;
+  }
+
+  /**
+   * Layer and modifier state as the firmware sees it, no unlock needed. Only firmware with the
+   * Halcyon Type extension (layer_report.c) answers; others return null.
+   * { layers, defaultLayers (bit masks), mods, oneShotMods, capsWord, capsLock }
+   */
+  async layerStatePoll() {
+    const d = await this.t.request([VIA.GET_KEYBOARD_VALUE, VIA_VALUE.LAYER_STATE], { timeout: 250, retries: 1 });
+    if (d[0] === VIA_UNHANDLED || d[0] !== VIA.GET_KEYBOARD_VALUE || d[1] !== VIA_VALUE.LAYER_STATE || d[2] < 1) return null;
+    return { layers: be32(d, 3), defaultLayers: be32(d, 7), mods: d[11], oneShotMods: d[12], capsWord: !!(d[13] & 1), capsLock: !!(d[13] & 2) };
   }
 
   /** Current switch matrix as an array of rows, each a Uint8Array(cols) of 0/1. Requires unlock. */
@@ -1905,6 +1919,48 @@ class FirmwareModel {
 }
 
 // ---------------------------------------------------------------------------
+// Snapshot without matrix access (Vial locked): pressed keys come from DOM key events of the
+// focused window. Layers and modifiers come from the firmware if it reports them
+// (fw = VialKeyboard.layerStatePoll()); otherwise a layer only shows once a key on it types.
+
+const HELD_LAYER_KEYS = new Set(['mo', 'layertap', 'tt', 'osl', 'layermod']);
+
+function lockedSnapshot({ dom, index, viewLayer, baseLayer, fw }) {
+  const keys = new Map();
+  if (!fw) {
+    let shown = -1;
+    for (const code of dom.codes) {
+      const hits = index.positionsForCode(code, [viewLayer, baseLayer]);
+      if (!hits.length) continue;
+      keys.set(hits[0].pos, { role: 'active' });
+      if (hits[0].layer !== baseLayer && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hits[0].layer);
+    }
+    return {
+      activeMask: (1 << baseLayer) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : baseLayer, defaultLayer: baseLayer,
+      mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
+    };
+  }
+  const base = fw.defaultLayers ? highestBit(fw.defaultLayers) : baseLayer;
+  const mask = fw.layers | (1 << base);
+  const display = highestBit(mask);
+  for (const code of dom.codes) {
+    const hits = index.positionsForCode(code, [display, base]);
+    if (hits.length) keys.set(hits[0].pos, { role: 'active' });
+  }
+  // The firmware doesn't say which key holds a layer: light the layer keys that can do it.
+  for (let l = 0; l < 32; l++) {
+    if (l === base || !(mask & (1 << l))) continue;
+    for (const k of index.layerKeys.get(l) || []) {
+      if (HELD_LAYER_KEYS.has(k.kind) && mask & (1 << k.from) && !keys.has(k.pos)) keys.set(k.pos, { role: 'hold' });
+    }
+  }
+  return {
+    activeMask: mask, displayLayer: display, defaultLayer: base,
+    mods: fw.mods, oneShotMods: fw.oneShotMods, oneShotLayer: -1, capsWord: fw.capsWord, capsLock: fw.capsLock || dom.capsLock, keys,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // OS-level modifier/key state from DOM keyboard events (only while focused).
 
 const CODE_MODS = {
@@ -1959,7 +2015,7 @@ class DomKeyTracker {
   }
 }
 
-return { FirmwareModel, DomKeyTracker };
+return { FirmwareModel, lockedSnapshot, DomKeyTracker };
 })();
 // ---- js/keyboard-view.js
 const __m5 = (() => {
@@ -2482,7 +2538,7 @@ const __m8 = (() => {
 const { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } = __m2;
 const { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } = __m1;
 const { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } = __m3;
-const { FirmwareModel, DomKeyTracker } = __m4;
+const { FirmwareModel, DomKeyTracker, lockedSnapshot } = __m4;
 const { KeyboardView } = __m5;
 const { KeymapIndex } = __m6;
 const { computeFingers, HandsView } = __m7;
@@ -2543,6 +2599,7 @@ class HalcyonMonkeytype {
     this.source = 'none';
     this.kb = null;
     this.matrix = false;
+    this.fw = null; // layer state reported by the firmware while locked
     this.pollToken = 0;
     this.previewLayer = null;
     this.lastPressed = null;
@@ -2650,12 +2707,15 @@ class HalcyonMonkeytype {
   #statusText() {
     if (this.source === 'none') return 'Keine Tastatur verbunden';
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
-    if (this.matrix) return 'Live – jede Taste, Layer und Modifier';
-    return 'Gesperrt – nur Tasten mit Zeichen sichtbar. Entsperren für Layer & Mod-Taps.';
+    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
+    if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
+    if (this.vial?.layerReport) return 'Gesperrt – Layer und Modifier meldet die Firmware, Tasten kommen aus monkeytype. ' + keymap;
+    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken) '
+      + 'oder mit der Firmware-Erweiterung layer_report.c. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : this.fw ? 'gesperrt · Layer' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -2672,8 +2732,8 @@ class HalcyonMonkeytype {
         h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
       return;
     }
-    if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
-      n.append(h('span', {}, 'Für Layer-, Mod-Tap- und One-Shot-Tasten Vial entsperren.'),
+    if (this.source === 'hid' && !this.matrix && !this.vial?.layerReport && !store.get('unlockDismissed', false)) {
+      n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
         h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
         h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
     }
@@ -2785,7 +2845,7 @@ class HalcyonMonkeytype {
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
         encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
       });
-      if (vial.unlocked) this.startPolling();
+      this.#pollForState();
       this.#updateStatus();
     } catch (err) {
       console.error('[halcyon]', err);
@@ -2817,22 +2877,22 @@ class HalcyonMonkeytype {
     this.setupKeyboard(DEMO_DATA);
   }
 
-  startPolling() {
-    this.stopPolling();
-    this.matrix = true;
+  /** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
+  #pollForState() {
+    if (this.vial?.unlocked) this.startPolling();
+    else if (this.vial?.layerReport) this.startLayerPolling();
+    else this.stopPolling();
+  }
+
+  #pollLoop(step) {
     const token = ++this.pollToken;
     let failures = 0;
     (async () => {
       while (this.pollToken === token) {
         const t0 = performance.now();
         try {
-          const pressed = await this.vial.matrixPoll();
+          await step(() => this.pollToken === token);
           failures = 0;
-          const before = new Set(this.model.held.keys());
-          if (this.model.update(pressed, performance.now())) {
-            for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
-            this.render();
-          }
         } catch (err) {
           if (this.pollToken !== token) return;
           if (++failures > 8) { this.stopPolling(); this.#updateStatus(); return; }
@@ -2840,12 +2900,45 @@ class HalcyonMonkeytype {
         await this.ticker.wait(Math.max(1, POLL_MS - (performance.now() - t0)));
       }
     })();
+  }
+
+  startPolling() {
+    this.stopPolling();
+    this.matrix = true;
+    this.#pollLoop(async (current) => {
+      const pressed = await this.vial.matrixPoll();
+      if (!current()) return;
+      const before = new Set(this.model.held.keys());
+      if (this.model.update(pressed, performance.now())) {
+        for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
+        this.render();
+      }
+    });
     this.#updateStatus();
+  }
+
+  startLayerPolling() {
+    this.stopPolling();
+    let last = '';
+    this.#pollLoop(async (current) => {
+      const fw = await this.vial.layerStatePoll();
+      if (!current() || !fw) return;
+      const key = JSON.stringify(fw);
+      if (key === last) return;
+      const first = !this.fw;
+      last = key;
+      this.fw = fw;
+      const base = fw.defaultLayers ? 31 - Math.clz32(fw.defaultLayers) : 0;
+      if (base !== this.model.defaultLayer && base < this.kb.layerCount) this.setBaseLayer(base);
+      else this.render();
+      if (first) this.#updateStatus();
+    });
   }
 
   stopPolling() {
     this.pollToken++;
     this.matrix = false;
+    this.fw = null;
     this.model?.update([], performance.now());
   }
 
@@ -2853,6 +2946,7 @@ class HalcyonMonkeytype {
     this.stopPolling();
     await this.vial.lock();
     store.set('unlockDismissed', false);
+    this.#pollForState();
     this.render();
     this.#updateStatus();
   }
@@ -2862,6 +2956,7 @@ class HalcyonMonkeytype {
     if (!vial || this.unlocking) return;
     await vial.refreshUnlockStatus();
     if (vial.unlocked) { this.startPolling(); return; }
+    this.stopPolling(); // the firmware answers nothing else while unlocking
     // Holding the unlock keys would type into the test: swallow keys while unlocking.
     const block = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
     for (const t of ['keydown', 'keypress', 'keyup', 'beforeinput', 'input']) window.addEventListener(t, block, true);
@@ -2886,31 +2981,16 @@ class HalcyonMonkeytype {
       this.unlocking = null;
       this.view.setUnlockKeys(null);
     }
-    if (vial.unlocked) this.startPolling();
+    this.#pollForState();
     this.#updateStatus();
   }
 
   // ---------------------------------------------------------------- live state
 
-  #domSnapshot() {
-    const keys = new Map();
-    let shown = -1;
-    const base = this.model.defaultLayer;
-    for (const code of this.dom.codes) {
-      const hits = this.index.positionsForCode(code, [this.view.layer, base]);
-      if (!hits.length) continue;
-      keys.set(hits[0].pos, { role: 'active' });
-      if (hits[0].layer !== base && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hits[0].layer);
-    }
-    return {
-      activeMask: (1 << base) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : base, defaultLayer: base,
-      mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: this.dom.capsLock, keys,
-    };
-  }
-
   render() {
     if (!this.kb) return;
-    const snap = this.matrix ? this.model.snapshot() : this.#domSnapshot();
+    const snap = this.matrix ? this.model.snapshot()
+      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, fw: this.fw });
     this.snap = snap;
     const layer = this.previewLayer ?? snap.displayLayer;
     const mask = snap.activeMask | (1 << snap.defaultLayer) | (1 << layer);
