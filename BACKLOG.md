@@ -12,8 +12,6 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   (Entsperren gilt bis zum Abstecken, Vial-App dabei schließen), Datenschutzerklärung (alles bleibt lokal),
   Store-Eintrag mit Screenshots 1280×800, Test in frischem Chrome-Profil, Repo und Dateinamen auf den neuen Namen
   umstellen. Danach Chrome Web Store (Konto: Gordon) und Edge Add-ons.
-- [ ] **VIA in der eigenständigen App**: Dort fehlt noch das Laden der Layout-Datei (im Overlay fertig).
-- [ ] **Gespeicherte Keymap in der eigenständigen App** (im Overlay fertig).
 
 ### Tests
 - [ ] Mit echter VIA-Tastatur testen (bisher nur mit simulierter VIA-Firmware).
@@ -25,9 +23,9 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
 
 ## Erledigt
-- [x] FR: VIA-Tastaturen im Overlay: Layout-Datei einmal laden, pro Tastatur gespeichert, sofort live.
+- [x] FR: VIA-Tastaturen (Overlay und eigenständige App): Layout-Datei einmal laden, pro Tastatur gespeichert, sofort live.
 - [x] Bug: VIA-Firmware wäre als „Vial-Protokoll 255“ durchgerutscht; Erkennung korrigiert.
-- [x] FR: Keymap merken – Overlay zeigt die zuletzt gelesene Keymap ohne Verbindung („gespeichert“).
+- [x] FR: Keymap merken – Overlay und eigenständige App zeigen die zuletzt gelesene Keymap ohne Verbindung.
 - [x] FR: Bevorzugte Tasten auch in der eigenständigen App (Lernen entsperrt, Nutzen gesperrt).
 - [x] Systemlayout: Gordon nutzt EurKEY (US + Umlaute über AltGr). „US“ war für die Grundtasten richtig;
   EurKEY ist jetzt wählbar (automatisch nicht erkennbar, der Browser kennt nur die Grundbelegung).

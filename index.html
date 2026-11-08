@@ -53,6 +53,20 @@
     </div>
   </div>
 
+  <div id="via-banner" class="banner" hidden>
+    <div>
+      <b>Layout-Datei nötig.</b>
+      <span id="via-text">Diese Tastatur hat VIA statt Vial.</span>
+      Lade einmal ihre VIA-Definition (JSON), z. B. aus github.com/the-via/keyboards. Sie wird für diese Tastatur gespeichert.
+      <span id="via-error" class="error-text"></span>
+    </div>
+    <div class="banner-actions">
+      <input id="via-file" type="file" accept=".json,application/json" hidden>
+      <button id="btn-via-file" class="btn primary">Layout-Datei laden</button>
+      <button id="btn-via-cancel" class="btn">Abbrechen</button>
+    </div>
+  </div>
+
   <main>
     <section id="trainer" class="trainer">
       <div id="config" class="config">

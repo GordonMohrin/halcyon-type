@@ -1,6 +1,6 @@
 // App wiring: connection, unlock flow, live polling, keyboard panel, typing test.
 
-import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } from './hid.js';
+import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, checkViaDefinition, UNLOCK_COUNTER_MAX } from './hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } from './kle.js';
 import { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } from './keycodes.js';
 import { FirmwareModel, DomKeyTracker, lockedSnapshot } from './state.js';
@@ -89,6 +89,8 @@ function updateStatus() {
     setStatus('Keine Tastatur verbunden', 'off');
   } else if (app.source === 'demo') {
     setStatus('Demo · ' + kbName(), 'demo');
+  } else if (app.source === 'cache') {
+    setStatus(kbName() + ' · aus dem Speicher – für die Live-Anzeige verbinden', 'off');
   } else if (app.matrix) {
     setStatus(kbName() + ' · live', 'live');
   } else {
@@ -159,32 +161,75 @@ async function applyHostLayout() {
 
 async function connect(device) {
   if (app.device === device && app.source === 'hid') return;
-  await disconnect();
+  await disconnect(null, false);
   setStatus('Verbinde …', 'busy');
   channel?.postMessage({ type: 'claim', from: tabId });
   try {
     const transport = new HidTransport(device);
     await transport.open();
     const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
-    await vial.load((f, what) => setStatus(`Lese ${what} … ${Math.round(f * 100)} %`, 'busy'));
+    await vial.load((f, what) => setStatus(`Lese ${what} … ${Math.round(f * 100)} %`, 'busy'),
+      { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
     app.device = device;
     app.transport = transport;
     app.vial = vial;
     app.source = 'hid';
-    setupKeyboard({
+    store.set('lastDevice', deviceId(device));
+    const data = {
       name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
       encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
-    });
+    };
+    store.set('keymap', data); // shown from storage while the keyboard is unplugged or busy elsewhere
+    setupKeyboard(data);
     pollForState();
     updateStatus();
   } catch (err) {
+    try { await device.close(); } catch { /* ignore */ }
+    if (err.code === 'needsDefinition') {
+      askViaDefinition(device);
+      return;
+    }
     console.error(err);
     setStatus('Fehler: ' + err.message, 'error');
-    try { await device.close(); } catch { /* ignore */ }
   }
 }
 
-async function disconnect(reason) {
+// VIA keyboards carry no layout: ask once for their VIA definition JSON, then keep it per keyboard.
+let viaDevice = null;
+
+function askViaDefinition(device, error = '') {
+  viaDevice = device;
+  $('#via-text').textContent = `${device.productName || 'Diese Tastatur'} hat VIA statt Vial.`;
+  $('#via-error').textContent = error;
+  $('#via-banner').hidden = false;
+  setStatus('Layout-Datei nötig', 'off');
+}
+
+async function onViaFile(file) {
+  const device = viaDevice;
+  if (!file || !device) return;
+  try {
+    const def = JSON.parse(await file.text());
+    const problem = checkViaDefinition(def, device);
+    if (problem) throw new Error(problem);
+    store.set('viaDef.' + deviceId(device), def);
+    $('#via-banner').hidden = true;
+    viaDevice = null;
+    await connect(device);
+  } catch (err) {
+    askViaDefinition(device, err.message);
+  }
+}
+
+function loadStored() {
+  const data = store.get('keymap', null);
+  if (!data?.keymap?.length || app.source === 'hid') return;
+  app.source = 'cache';
+  setupKeyboard(data);
+  updateStatus();
+}
+
+async function disconnect(reason, showStored = true) {
   stopPolling();
   if (app.transport) await app.transport.close();
   app.transport = null;
@@ -195,6 +240,7 @@ async function disconnect(reason) {
     app.kb = null;
     $('#kbd').innerHTML = '';
     $('#layers').innerHTML = '';
+    if (showStored) loadStored();
   }
   updateStatus();
   if (reason) setStatus(reason, 'off');
@@ -214,7 +260,7 @@ async function connectClicked() {
 }
 
 async function loadDemo() {
-  await disconnect();
+  await disconnect(null, false);
   const res = await fetch('demo/halcyon-kyria.json');
   const data = await res.json();
   app.source = 'demo';
@@ -640,6 +686,9 @@ function bindEvents() {
   $('#btn-demo').addEventListener('click', loadDemo);
   $('#btn-float').addEventListener('click', () => openFloating().catch((e) => setStatus('Fenster: ' + e.message, 'error')));
   $('#btn-unlock').addEventListener('click', runUnlock);
+  $('#btn-via-file').addEventListener('click', () => $('#via-file').click());
+  $('#via-file').addEventListener('change', (e) => onViaFile(e.target.files[0]));
+  $('#btn-via-cancel').addEventListener('click', () => { $('#via-banner').hidden = true; viaDevice = null; updateStatus(); });
   $('#btn-unlock-later').addEventListener('click', () => { store.set('unlockDismissed', true); updateStatus(); });
   $('#btn-unlock-cancel').addEventListener('click', () => { unlockAbort = null; });
   $('#btn-lock').addEventListener('click', async () => {
@@ -723,9 +772,10 @@ async function boot() {
     $('#btn-connect').disabled = true;
     return;
   }
-  const granted = await findGrantedDevice();
-  if (granted) connect(granted);
-  else if (params.get('demo') !== null) loadDemo();
+  const granted = await findGrantedDevice(store.get('lastDevice', null));
+  if (params.get('demo') !== null) loadDemo();
+  else if (granted) { await connect(granted); if (app.source === 'none') loadStored(); }
+  else loadStored();
 }
 
 boot();

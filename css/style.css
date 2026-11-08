@@ -235,3 +235,5 @@ body.pip .kbd-empty .muted { display: none; }
   .result { grid-template-columns: 1fr; }
   .words-wrap { font-size: 1.2rem; }
 }
+.error-text { display: block; color: var(--err); margin-top: 4px; }
+.error-text:empty { display: none; }
