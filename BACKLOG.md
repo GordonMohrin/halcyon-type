@@ -5,8 +5,7 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
 ## Offen
 
 ### Bugs
-- [ ] **Modifier-Leiste in echtem monkeytype prüfen**: Fix aus 0.2.0 (Kästchen wachsen mit „Strg“/„Alt“/„Win“)
-  ist nur in der monkeytype-Nachbildung getestet.
+- (keine bekannten)
 
 ### Feature-Wünsche
 - [ ] **Store-Release vorbereiten**: Texte auf Englisch (Deutsch als Übersetzung), Erklärung beim ersten Start
@@ -21,8 +20,7 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
 - [ ] **Bevorzugte Tasten in der eigenständigen App**: Lernen und Nutzen gibt es bisher nur im monkeytype-Overlay.
 
 ### Tests
-- [ ] 0.2.0 in echtem monkeytype mit der Elora: gesperrt (Layer erscheint mit der ersten Taste darauf),
-  entsperrt (Lernen der bevorzugten Taste), Menü „Vergessen“.
+- [ ] Elora live: „!“ über die Layer-2-Taste lernen (nach dem Fix für eingebaute Modifier), Menü „Vergessen“.
 - [ ] Zweite Tastatur testen.
 - [ ] Systemlayout „Automatisch“ erkennt auf Gordons Windows „US“: prüfen, ob das stimmt.
 
@@ -32,6 +30,13 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
 
 ## Erledigt
+- [x] Bug: Lernen ignorierte Tasten mit eingebautem Shift (z. B. `S(KC_1)` = „!“ auf Layer 2).
+- [x] Bug: Lernen hing an Tastenereignissen der Seite und tat nichts, wenn ein anderes Fenster den Fokus hatte.
+  Jetzt direkt aus der Matrix.
+- [x] Bug: Neu geladen während eines laufenden Entsperrens → leere Keymap (0 Layer). Jetzt wird das Entsperren
+  zuerst abgeschlossen.
+- [x] Test Elora live: gesperrt (Layer 2 für „!“ über Vorliebe, „1“ auf der Basis), Modifier-Leiste ohne
+  Überlappung, entsperrt „3 über Layer 1“ gelernt und als Hinweis gezeigt.
 - [x] 0.2.0 – FR: Name „Split Keyboard for monkeytype“, Icons, Store-ZIP in `dist/`.
 - [x] 0.2.0 – FR: Liegt ein Zeichen auf mehreren Tasten, merkt sich die App den zuletzt benutzten Weg und zeigt ihn.
   Gesperrt wählt sie die Taste über diese Vorliebe und das erwartete Zeichen.
