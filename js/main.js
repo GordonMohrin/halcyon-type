@@ -123,6 +123,7 @@ function setupKeyboard(data) {
   const ctx = { host: app.host, tapDances: data.tapDances || [], customKeycodes: def.customKeycodes || null };
   app.kb = {
     ...data, placed, positions, keyX, centerX: placed.width / 2, ctx, options, choices,
+    preferred: store.get('paths.' + data.uid, {}),
     usedLayers: nonEmptyLayers(data.keymap),
   };
   const base = store.get('base.' + data.uid, 0);
@@ -232,7 +233,17 @@ function startPolling() {
   app.matrix = true;
   pollLoop(async (current) => {
     const pressed = await app.vial.matrixPoll();
-    if (current() && app.model.update(pressed, performance.now())) render();
+    if (!current()) return;
+    const before = new Set(app.model.held.keys());
+    if (!app.model.update(pressed, performance.now())) return;
+    // learn which key the user takes for characters that have several (see KeymapIndex.learnPress)
+    let learned = false;
+    for (const p of pressed) {
+      const rec = before.has(p) ? null : app.model.held.get(p);
+      if (rec?.role === 'active') learned = app.index.learnPress(p, rec.layer, app.model.heldMods(p)) || learned;
+    }
+    if (learned) { store.set('paths.' + app.kb.uid, app.kb.preferred); updateHint(app.lastExpect); }
+    render();
   });
   updateStatus();
 }
@@ -319,11 +330,12 @@ function keyNameAt(r, c) {
 // ------------------------------------------------------------------ rendering of live state
 
 let lastSnap = null;
+const resolved = new Map(); // locked: DOM code -> key chosen when it went down
 
 function render() {
   if (!app.kb) return;
   const snap = app.matrix ? app.model.snapshot()
-    : lockedSnapshot({ dom, index: app.index, viewLayer: view.layer, baseLayer: app.model.defaultLayer });
+    : lockedSnapshot({ dom, index: app.index, viewLayer: view.layer, baseLayer: app.model.defaultLayer, resolved });
   lastSnap = snap;
   const focused = document.hasFocus();
   const layer = app.previewLayer ?? snap.displayLayer;
@@ -665,7 +677,18 @@ function bindEvents() {
     if (e.key === 'Tab' && !$('#result').hidden) { e.preventDefault(); hideResult(); test.restart(); }
   });
 
-  dom.onChange(() => { if (!app.matrix) render(); else renderModsOnly(); });
+  dom.onChange((e) => {
+    if (app.matrix) { renderModsOnly(); return; }
+    if (!e) resolved.clear();
+    else if (e.type === 'keyup') resolved.delete(e.code);
+    else if (e.type === 'keydown' && app.index) {
+      // locked: pick the key via the hint for the expected character, then the learned preference
+      const expected = app.lastExpect ? app.index.pathFor(app.lastExpect) : null;
+      const hit = app.index.resolveTyped(e.code, e.key.length === 1 ? e.key : null, expected, [view.layer, app.model.defaultLayer]);
+      if (hit) resolved.set(e.code, hit);
+    }
+    render();
+  });
   window.addEventListener('blur', () => render());
   window.addEventListener('focus', () => render());
 
