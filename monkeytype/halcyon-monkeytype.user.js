@@ -939,6 +939,7 @@ const MSG_LEN = 32;
 
 const VIA = { PROTOCOL_VERSION: 0x01, GET_KEYBOARD_VALUE: 0x02, LAYER_COUNT: 0x11, KEYMAP_GET_BUFFER: 0x12, VIAL_PREFIX: 0xfe };
 const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03 };
+const VIA_UNHANDLED = 0xff;
 const VIAL = {
   KEYBOARD_ID: 0x00, GET_SIZE: 0x01, GET_DEF: 0x02, GET_ENCODER: 0x03, UNLOCK_STATUS: 0x05, UNLOCK_START: 0x06,
   UNLOCK_POLL: 0x07, LOCK: 0x08, QMK_SETTINGS_GET: 0x0a, DYNAMIC_ENTRY_OP: 0x0d,
@@ -1026,40 +1027,38 @@ class VialKeyboard {
     this.name = name;
   }
 
-  /** Load everything needed for display. onProgress(fraction, text) is optional. */
-  async load(onProgress = () => {}) {
+  /**
+   * Load everything needed for display. onProgress(fraction, text) is optional.
+   * VIA firmware (no Vial) has no layout on board: pass its VIA definition JSON as viaDefinition,
+   * otherwise load() throws an error with code 'needsDefinition'.
+   */
+  async load(onProgress = () => {}, { viaDefinition = null } = {}) {
     const t = this.t;
     onProgress(0.02, 'Protokoll');
     const via = await t.request([VIA.PROTOCOL_VERSION], { echo: 1 });
     this.viaProtocol = be16(via, 1);
 
     const id = await t.request([VIA.VIAL_PREFIX, VIAL.KEYBOARD_ID]);
-    this.vialProtocol = le32(id, 0);
-    if (this.vialProtocol === 0xffffffff || this.vialProtocol > 0xff) {
-      throw new Error('Das ist keine Vial-Firmware (nur VIA). Diese App braucht Vial.');
+    this.isVia = id[0] === VIA_UNHANDLED; // VIA answers the Vial prefix with id_unhandled
+    if (this.isVia) {
+      await this.#loadViaDefinition(viaDefinition);
+    } else {
+      this.vialProtocol = le32(id, 0);
+      this.uid = [...id.slice(4, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+      if (this.vialProtocol < 6) {
+        console.warn('Vial protocol', this.vialProtocol, '< 6: keycodes may be labelled wrongly (old QMK keycode layout).');
+      }
+      await this.#loadVialDefinition(onProgress);
     }
-    this.uid = [...id.slice(4, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
-    if (this.vialProtocol < 6) {
-      console.warn('Vial protocol', this.vialProtocol, '< 6: keycodes may be labelled wrongly (old QMK keycode layout).');
-    }
-
-    const sz = le32(await t.request([VIA.VIAL_PREFIX, VIAL.GET_SIZE]), 0);
-    if (!sz || sz > 1 << 20) throw new Error('Ungültige Größe der Vial-Definition: ' + sz);
-    const payload = new Uint8Array(sz);
-    const blocks = Math.ceil(sz / MSG_LEN);
-    for (let b = 0; b < blocks; b++) {
-      const data = await t.request([VIA.VIAL_PREFIX, VIAL.GET_DEF, b & 0xff, (b >> 8) & 0xff, 0, 0]);
-      payload.set(data.slice(0, Math.min(MSG_LEN, sz - b * MSG_LEN)), b * MSG_LEN);
-      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'Layout-Definition');
-    }
-    this.definition = JSON.parse(new TextDecoder().decode(xzDecompress(payload)));
     this.rows = this.definition.matrix.rows;
     this.cols = this.definition.matrix.cols;
 
     // An unlock left half-done (page reloaded while holding the keys) makes the firmware ignore
     // everything but unlock commands, so keymap reads would come back empty: finish it first.
-    await this.refreshUnlockStatus();
-    if (this.unlockInProgress) await this.#finishUnlock(onProgress);
+    if (!this.isVia) {
+      await this.refreshUnlockStatus();
+      if (this.unlockInProgress) await this.#finishUnlock(onProgress);
+    }
 
     this.layerCount = (await t.request([VIA.LAYER_COUNT], { echo: 1 }))[1];
     if (!this.layerCount) throw new Error('Die Tastatur hat keine Keymap geliefert. Bitte ab- und wieder anstecken.');
@@ -1091,12 +1090,50 @@ class VialKeyboard {
     }
 
     onProgress(0.88, 'Encoder & Einstellungen');
+    if (this.isVia) {
+      // no Vial extras; VIA never locks the switch matrix
+      Object.assign(this, { encoders: {}, tapDances: [], unlocked: true, unlockInProgress: false, unlockKeys: [] });
+      this.settings = { tappingTerm: 200, permissiveHold: false, holdOnOtherKeyPress: false, oneshotTimeout: 0, tappingToggle: 5 };
+      onProgress(1, 'Fertig');
+      return this;
+    }
     await this.#loadEncoders();
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
     onProgress(1, 'Fertig');
     return this;
+  }
+
+  async #loadVialDefinition(onProgress) {
+    const t = this.t;
+    const sz = le32(await t.request([VIA.VIAL_PREFIX, VIAL.GET_SIZE]), 0);
+    if (!sz || sz > 1 << 20) throw new Error('Ungültige Größe der Vial-Definition: ' + sz);
+    const payload = new Uint8Array(sz);
+    const blocks = Math.ceil(sz / MSG_LEN);
+    for (let b = 0; b < blocks; b++) {
+      const data = await t.request([VIA.VIAL_PREFIX, VIAL.GET_DEF, b & 0xff, (b >> 8) & 0xff, 0, 0]);
+      payload.set(data.slice(0, Math.min(MSG_LEN, sz - b * MSG_LEN)), b * MSG_LEN);
+      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'Layout-Definition');
+    }
+    this.definition = JSON.parse(new TextDecoder().decode(xzDecompress(payload)));
+  }
+
+  async #loadViaDefinition(def) {
+    const dev = this.t.device;
+    this.vialProtocol = null;
+    this.uid = 'via-' + (dev.vendorId ?? 0).toString(16).padStart(4, '0') + (dev.productId ?? 0).toString(16).padStart(4, '0');
+    if (this.viaProtocol < 12) {
+      throw new Error(`VIA-Protokoll ${this.viaProtocol} ist zu alt (QMK vor 2022). Bitte die Firmware aktualisieren.`);
+    }
+    if (!def) {
+      const err = new Error('Diese Tastatur hat VIA statt Vial. Für das Layout wird ihre VIA-Definition (JSON) gebraucht.');
+      err.code = 'needsDefinition';
+      throw err;
+    }
+    const problem = checkViaDefinition(def, dev);
+    if (problem) throw new Error(problem);
+    this.definition = def;
   }
 
   async #finishUnlock(onProgress) {
@@ -1211,6 +1248,19 @@ class VialKeyboard {
   }
 }
 
+/** Why a VIA definition JSON doesn't fit this device, or null if it does. */
+function checkViaDefinition(def, device) {
+  if (!def || typeof def !== 'object' || !def.matrix?.rows || !def.matrix?.cols || !Array.isArray(def.layouts?.keymap)) {
+    return 'Das ist keine VIA-Definition (es fehlen matrix oder layouts.keymap).';
+  }
+  const id = (v) => (typeof v === 'string' ? parseInt(v, 16) : v);
+  if (device && def.vendorId !== undefined && def.productId !== undefined
+    && (id(def.vendorId) !== device.vendorId || id(def.productId) !== device.productId)) {
+    return `Die Definition gehört zu einer anderen Tastatur (${def.name || 'unbekannt'}).`;
+  }
+  return null;
+}
+
 /** Find an already-permitted Vial device (no prompt), preferring the one with this "vendorId:productId". */
 async function findGrantedDevice(preferredId) {
   if (!('hid' in navigator)) return null;
@@ -1230,7 +1280,7 @@ async function requestDevice() {
   return devices.find(isRawHid) || null;
 }
 
-return { RAW_HID_FILTER, UNLOCK_COUNTER_MAX, HidTransport, VialKeyboard, findGrantedDevice, deviceId, isRawHid, requestDevice };
+return { RAW_HID_FILTER, UNLOCK_COUNTER_MAX, HidTransport, VialKeyboard, checkViaDefinition, findGrantedDevice, deviceId, isRawHid, requestDevice };
 })();
 // ---- js/keycodes.js
 const __m3 = (() => {
@@ -2576,7 +2626,7 @@ return { computeFingers, HandsView };
 })();
 // ---- monkeytype/overlay.js
 const __m8 = (() => {
-const { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, UNLOCK_COUNTER_MAX } = __m2;
+const { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, checkViaDefinition, UNLOCK_COUNTER_MAX } = __m2;
 const { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } = __m1;
 const { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } = __m3;
 const { FirmwareModel, DomKeyTracker, lockedSnapshot } = __m4;
@@ -2721,6 +2771,7 @@ class HalcyonMonkeytype {
 
     m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Split Keyboard for monkeytype'));
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
+    if (this.viaPrompt) m.append(this.#viaPromptUi());
     const actions = row();
     if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
     else if (this.source !== 'hid') actions.append(btn('Tastatur verbinden', () => this.connectClicked(), true));
@@ -2749,6 +2800,33 @@ class HalcyonMonkeytype {
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
     m.append(row(h('span', {}, 'Größe'), size));
+  }
+
+  /** VIA keyboards carry no layout: ask for their VIA definition JSON once, then keep it per keyboard. */
+  #viaPromptUi() {
+    const { device, error } = this.viaPrompt;
+    const file = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const def = JSON.parse(await f.text());
+        const problem = checkViaDefinition(def, device);
+        if (problem) throw new Error(problem);
+        store.set('viaDef.' + deviceId(device), def);
+        this.viaPrompt = null;
+        await this.connect(device);
+      } catch (err) {
+        this.viaPrompt = { device, error: err.message };
+      }
+      this.#renderMenu();
+    } });
+    return h('div', { class: 'hmt-menu-status' },
+      h('div', {}, `${device.productName || 'Diese Tastatur'} hat VIA statt Vial. Lade einmal ihre VIA-Definition (JSON), `
+        + 'z. B. aus github.com/the-via/keyboards oder aus VIA (Einstellungen → Design).'),
+      error ? h('div', { style: 'color: var(--error-color, #ca4754)' }, error) : null,
+      h('div', { class: 'hmt-menu-row' }, file,
+        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Layout-Datei laden'),
+        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Abbrechen')));
   }
 
   #statusText() {
@@ -2894,7 +2972,7 @@ class HalcyonMonkeytype {
       this.statusEl.textContent = 'lädt …';
       await vial.load((f, what) => {
         this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
-      });
+      }, { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       store.set('lastDevice', deviceId(device));
       const data = {
@@ -2906,10 +2984,17 @@ class HalcyonMonkeytype {
       this.#pollForState();
       this.#updateStatus();
     } catch (err) {
+      try { await device.close(); } catch { /* ignore */ }
+      if (err.code === 'needsDefinition') {
+        this.viaPrompt = { device };
+        this.statusEl.textContent = 'Layout fehlt';
+        this.menuEl.hidden = false;
+        this.#renderMenu();
+        return;
+      }
       console.error('[halcyon]', err);
       this.statusEl.textContent = 'Fehler';
       this.pill.title = err.message;
-      try { await device.close(); } catch { /* ignore */ }
     }
   }
 

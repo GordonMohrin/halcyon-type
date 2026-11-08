@@ -12,15 +12,12 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   (Entsperren gilt bis zum Abstecken, Vial-App dabei schließen), Datenschutzerklärung (alles bleibt lokal),
   Store-Eintrag mit Screenshots 1280×800, Test in frischem Chrome-Profil, Repo und Dateinamen auf den neuen Namen
   umstellen. Danach Chrome Web Store (Konto: Gordon) und Edge Add-ons.
-- [ ] **Weitere Tastaturen**: Vial hat Vorrang und läuft. VIA-Tastaturen wären möglich (Keymap lesbar, Matrix ohne
-  Entsperren), es fehlt aber die Layout-Beschreibung: aus VIAs öffentlicher Sammlung oder als Datei vom Nutzer.
-- [ ] **Keymap merken**: gelesene Keymap speichern und sofort aus dem Speicher zeigen, mit Hinweis
-  „aus dem Speicher – zum Aktualisieren verbinden“, z. B. wenn die Tastatur gerade in einem anderen Tab hängt.
-  Hinweis: Lesen der Layer braucht kein Entsperren.
-- [ ] **Bevorzugte Tasten in der eigenständigen App**: Lernen und Nutzen gibt es bisher nur im monkeytype-Overlay.
+- [ ] **VIA in der eigenständigen App**: Dort fehlt noch das Laden der Layout-Datei (im Overlay fertig).
+- [ ] **Gespeicherte Keymap in der eigenständigen App** (im Overlay fertig).
 
 ### Tests
-- [ ] Systemlayout „Automatisch“ erkennt auf Gordons Windows „US“: prüfen, ob das stimmt.
+- [ ] Mit echter VIA-Tastatur testen (bisher nur mit simulierter VIA-Firmware).
+- [ ] Nach Neuladen der Erweiterung: Elora und W-CORNE kurz gegenprüfen (Vial-Erkennung wurde umgebaut).
 
 ## Grenzen (nicht lösbar ohne Firmware-Änderung)
 - Gesperrt sieht die App reine Layer-Tasten (MO, LT …) nicht, weil sie dem PC nichts schicken. Ein Layer erscheint
@@ -28,6 +25,12 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
 
 ## Erledigt
+- [x] FR: VIA-Tastaturen im Overlay: Layout-Datei einmal laden, pro Tastatur gespeichert, sofort live.
+- [x] Bug: VIA-Firmware wäre als „Vial-Protokoll 255“ durchgerutscht; Erkennung korrigiert.
+- [x] FR: Keymap merken – Overlay zeigt die zuletzt gelesene Keymap ohne Verbindung („gespeichert“).
+- [x] FR: Bevorzugte Tasten auch in der eigenständigen App (Lernen entsperrt, Nutzen gesperrt).
+- [x] Systemlayout: Gordon nutzt EurKEY (US + Umlaute über AltGr). „US“ war für die Grundtasten richtig;
+  EurKEY ist jetzt wählbar (automatisch nicht erkennbar, der Browser kennt nur die Grundbelegung).
 - [x] Test W-CORNE (Vial ohne Sperre, 4×12, 46 Tasten): verbindet live ohne Entsperren, Layout und Beschriftung
   stimmen, L1/L2 beim Halten schalten live um, gedrückte Tasten auf dem Layer werden gezeigt.
 - [x] FR: Im Menü „Andere Tastatur“; monkeytype verbindet beim Öffnen die zuletzt benutzte Tastatur.

@@ -3,7 +3,7 @@
 // Run: node tools/test-app.mjs
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { HidTransport, VialKeyboard } from '../js/hid.js';
+import { HidTransport, VialKeyboard, checkViaDefinition } from '../js/hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys } from '../js/kle.js';
 import { FirmwareModel, lockedSnapshot } from '../js/state.js';
 import { KeymapIndex } from '../js/lookup.js';
@@ -85,6 +85,26 @@ const posOf = (layer, kc) => {
   await kb.load((f, what) => texts.push(what));
   check('load finishes a pending unlock first', kb.unlocked && texts.some((s) => s.startsWith('Entsperren')));
   check('keymap complete after pending unlock', kb.layerCount === 8 && JSON.stringify(kb.keymap) === JSON.stringify(demo.keymap));
+  await t.close();
+}
+
+// plain VIA firmware: layout comes from its VIA definition JSON, matrix readable without unlock
+{
+  const dev = new MockVialDevice(demo, { via: true });
+  const t = new HidTransport(dev);
+  await t.open();
+  let err = null;
+  try { await new VialKeyboard(t, dev.productName).load(); } catch (e) { err = e; }
+  check('VIA without definition asks for it', err?.code === 'needsDefinition', err?.message);
+  const viaDef = { name: 'Test VIA', vendorId: '0x8D1D', productId: '0x1234', matrix: demo.definition.matrix, layouts: demo.definition.layouts };
+  check('VIA definition for another keyboard is rejected', !!checkViaDefinition({ ...viaDef, productId: '0x9999' }, dev));
+  check('non-VIA JSON is rejected', !!checkViaDefinition({ foo: 1 }, dev));
+  const kb = new VialKeyboard(t, dev.productName);
+  await kb.load(() => {}, { viaDefinition: viaDef });
+  check('VIA keymap read', kb.isVia && kb.layerCount === 8 && JSON.stringify(kb.keymap) === JSON.stringify(demo.keymap));
+  check('VIA is never locked', kb.unlocked && kb.unlockKeys.length === 0 && kb.uid === 'via-8d1d1234', kb.uid);
+  dev.press('2,3');
+  check('VIA matrix live', (await kb.matrixPoll()).join() === '2,3');
   await t.close();
 }
 

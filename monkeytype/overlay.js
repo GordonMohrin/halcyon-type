@@ -4,7 +4,7 @@
 // the words. Styling follows monkeytype's keymap (theme colors, next-key highlight,
 // 250 ms correct/error flash), see LICENSE (GPL-3.0) and monkeytype's Keymap.tsx.
 
-import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, UNLOCK_COUNTER_MAX } from '../js/hid.js';
+import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, checkViaDefinition, UNLOCK_COUNTER_MAX } from '../js/hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } from '../js/kle.js';
 import { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } from '../js/keycodes.js';
 import { FirmwareModel, DomKeyTracker, lockedSnapshot } from '../js/state.js';
@@ -136,6 +136,7 @@ class HalcyonMonkeytype {
 
     m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Split Keyboard for monkeytype'));
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
+    if (this.viaPrompt) m.append(this.#viaPromptUi());
     const actions = row();
     if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
     else if (this.source !== 'hid') actions.append(btn('Tastatur verbinden', () => this.connectClicked(), true));
@@ -164,6 +165,33 @@ class HalcyonMonkeytype {
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
     m.append(row(h('span', {}, 'Größe'), size));
+  }
+
+  /** VIA keyboards carry no layout: ask for their VIA definition JSON once, then keep it per keyboard. */
+  #viaPromptUi() {
+    const { device, error } = this.viaPrompt;
+    const file = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const def = JSON.parse(await f.text());
+        const problem = checkViaDefinition(def, device);
+        if (problem) throw new Error(problem);
+        store.set('viaDef.' + deviceId(device), def);
+        this.viaPrompt = null;
+        await this.connect(device);
+      } catch (err) {
+        this.viaPrompt = { device, error: err.message };
+      }
+      this.#renderMenu();
+    } });
+    return h('div', { class: 'hmt-menu-status' },
+      h('div', {}, `${device.productName || 'Diese Tastatur'} hat VIA statt Vial. Lade einmal ihre VIA-Definition (JSON), `
+        + 'z. B. aus github.com/the-via/keyboards oder aus VIA (Einstellungen → Design).'),
+      error ? h('div', { style: 'color: var(--error-color, #ca4754)' }, error) : null,
+      h('div', { class: 'hmt-menu-row' }, file,
+        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Layout-Datei laden'),
+        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Abbrechen')));
   }
 
   #statusText() {
@@ -309,7 +337,7 @@ class HalcyonMonkeytype {
       this.statusEl.textContent = 'lädt …';
       await vial.load((f, what) => {
         this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
-      });
+      }, { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       store.set('lastDevice', deviceId(device));
       const data = {
@@ -321,10 +349,17 @@ class HalcyonMonkeytype {
       this.#pollForState();
       this.#updateStatus();
     } catch (err) {
+      try { await device.close(); } catch { /* ignore */ }
+      if (err.code === 'needsDefinition') {
+        this.viaPrompt = { device };
+        this.statusEl.textContent = 'Layout fehlt';
+        this.menuEl.hidden = false;
+        this.#renderMenu();
+        return;
+      }
       console.error('[halcyon]', err);
       this.statusEl.textContent = 'Fehler';
       this.pill.title = err.message;
-      try { await device.close(); } catch { /* ignore */ }
     }
   }
 

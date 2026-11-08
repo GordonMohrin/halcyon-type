@@ -4,7 +4,8 @@
 export class MockVialDevice extends EventTarget {
   /**
    * demo: object in the format of demo/halcyon-kyria.json
-   * opts: { definitionXz: Uint8Array (lzma-compressed vial.json), unlockKeys: [[r,c]], counterMax, insecure }
+   * opts: { definitionXz: Uint8Array (lzma-compressed vial.json), unlockKeys: [[r,c]], counterMax, insecure,
+   *         via: behave like plain VIA firmware (no Vial commands, matrix never locked) }
    */
   constructor(demo, opts = {}) {
     super();
@@ -21,6 +22,10 @@ export class MockVialDevice extends EventTarget {
     this.timer = 0;
     this.pressed = new Set(); // "r,c"
     this.requests = 0;
+    this.via = !!opts.via;
+    this.vendorId = 0x8d1d;
+    this.productId = 0x1234;
+    if (this.via) this.unlocked = 1;
   }
 
   async open() { this.opened = true; }
@@ -44,6 +49,7 @@ export class MockVialDevice extends EventTarget {
 
   #handle(msg) {
     const d = this.demo;
+    if (this.via && msg[0] === 0xfe) { msg[0] = 0xff; return msg; } // VIA: Vial prefix is id_unhandled
     // vial-qmk: while an unlock is in progress only these Vial commands are answered
     if (this.inProgress && !(msg[0] === 0xfe && [0x00, 0x01, 0x02, 0x05, 0x06, 0x07].includes(msg[1]))) return msg;
     const { rows, cols } = d.definition.matrix;

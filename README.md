@@ -26,7 +26,7 @@ Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modif
 
 Ab dann verbindet sich die Tastatur beim Öffnen von monkeytype automatisch. Das Entsperren gilt bis zum Abstecken.
 Im Menü **⌨ Split** stellst du außerdem ein:
-- Systemlayout (Deutsch Mac/Windows, US)
+- Systemlayout (Deutsch Mac/Windows, US, EurKEY)
 - Basis-Layer
 - Hände, Hinweise und Layer-Leiste an oder aus
 - Encoder und Module zeigen
@@ -39,6 +39,17 @@ Im Menü **⌨ Split** stellst du außerdem ein:
   Tasten sieht sie, sobald sie ein Zeichen tippen. Reine Layer-Tasten (MO, LT …) schicken dem PC nichts,
   deshalb erscheint ein Layer erst mit der ersten Taste, die darauf tippt.
 - **Entsperrt**: jede Taste live, auch Layer- und Mod-Tap-Tasten, schon beim Halten. Gilt bis zum Abstecken.
+
+### VIA-Tastaturen
+
+Tastaturen mit VIA statt Vial gehen auch. Ihre Firmware enthält kein Layout, deshalb fragt das Menü einmal nach
+der VIA-Definition (JSON), z. B. aus [the-via/keyboards](https://github.com/the-via/keyboards). Sie wird pro Tastatur
+gespeichert. VIA sperrt die Tasten nicht, die Anzeige ist also sofort live. Voraussetzung: VIA-Protokoll 12 (QMK ab 2022).
+
+### Ohne Verbindung
+
+Die zuletzt gelesene Keymap bleibt gespeichert. Ist die Tastatur nicht angesteckt oder in einem anderen Tab verbunden,
+zeigt das Overlay sie aus dem Speicher („gespeichert“) mit einem Knopf zum Verbinden.
 
 ### Mehrere Wege zum selben Zeichen
 
