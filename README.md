@@ -94,11 +94,18 @@ Ohne Picture-in-Picture: <http://localhost:8137/?view=keyboard> in einem eigenen
 Die Keymap mit allen Layern liest die App immer direkt aus der Tastatur, auch gesperrt. Gesperrt fehlt nur,
 welche Taste gerade gedrückt ist. Tasten mit Zeichen sieht die App über monkeytype, reine Layer-Tasten (MO, LT …) nicht.
 
-Firmware mit [`layer_report.c`](https://github.com/GordonMohrin/qmk_userspace/blob/halcyon/keyboards/splitkb/halcyon/elora/keymaps/gordon/layer_report.c)
-meldet zusätzlich aktiven Layer, Modifier, One-Shot-Mods und Caps Word, ohne Entsperren und ohne preiszugeben,
-welche Tasten gedrückt sind. Dann zeigt die App gesperrt den Layer, sobald du die Layer-Taste hältst
-(Status „gesperrt · Layer“). Für deine eigene Firmware: die Datei in den Keymap-Ordner kopieren und
-`SRC += layer_report.c` in `rules.mk` eintragen.
+Mit [`firmware/layer_report.c`](firmware/layer_report.c) meldet die Firmware zusätzlich aktiven Layer, Modifier,
+One-Shot-Mods und Caps Word, ohne Entsperren und ohne preiszugeben, welche Tasten gedrückt sind. Dann zeigt die App
+gesperrt den Layer, sobald du die Layer-Taste hältst (Status „gesperrt · Layer“).
+
+Das funktioniert mit jeder QMK-Tastatur mit Vial, nicht nur mit Halcyon:
+1. `firmware/layer_report.c` in den Keymap-Ordner kopieren.
+2. In dessen `rules.mk` die Zeile `SRC += layer_report.c` ergänzen.
+3. Firmware bauen und flashen.
+
+Hat die Tastatur schon ein eigenes `raw_hid_receive_kb()`, kommt `#define LAYER_REPORT_NO_HOOK` in die `config.h`,
+und die eigene Funktion beginnt mit `if (layer_report_handle(data)) return;`.
+Firmware ohne die Datei antwortet „unbekannt“. Die App merkt das und läuft wie bisher.
 
 ## Grenzen
 
