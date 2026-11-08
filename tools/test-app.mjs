@@ -191,13 +191,14 @@ const posOf = (layer, kc) => {
   check('locked without context: base key', hit.pos === oeBase.pos && hit.layer === 0);
 
   check('hint before learning: base', idx.pathFor('ö').layer === 0);
-  const held = [{ pos: oeBase.pos, layer: 0, downAt: 1 }, { pos: oeL4.pos, layer: 4, downAt: 5 }];
-  check('learn layer-4 way for ö (latest press)', idx.learn('ö', oeCode, held) && idx.kb.preferred['ö'] === '4:' + oeL4.pos);
-  check('learn is idempotent', !idx.learn('ö', oeCode, held));
+  check('learn the layer-4 key for ö', idx.learnPress(oeL4.pos, 4, 0) && idx.kb.preferred['ö'] === '4:' + oeL4.pos);
+  check('learn is idempotent', !idx.learnPress(oeL4.pos, 4, 0));
   check('hint follows preference', idx.pathFor('ö').target === oeL4.pos && idx.pathFor('ö').layer === 4);
   hit = idx.resolveTyped(oeCode, 'ö', null, [0, 0]);
   check('locked: preference beats base layer', hit.pos === oeL4.pos && hit.layer === 4);
-  check('learn ignores unambiguous chars', !idx.learn('1', 'Digit1', [{ pos: one.target, layer: 4, downAt: 9 }]));
+  check('shift press learns the shifted character only', idx.learnPress(oeBase.pos, 0, 0x02) && idx.kb.preferred['ö'] === '4:' + oeL4.pos
+    && idx.kb.preferred['Ö'] === '0:' + oeBase.pos);
+  check('learn ignores unambiguous chars', !idx.learnPress(one.target, 4, 0) && !('1' in idx.kb.preferred));
   idx.kb.preferred = {};
   check('space found', !!idx.pathFor(' '));
   check('backspace found', !!idx.pathFor('\b'));

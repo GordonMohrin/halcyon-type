@@ -59,7 +59,6 @@ class HalcyonMonkeytype {
     this.previewLayer = null;
     this.lastPressed = null;
     this.resolved = new Map(); // locked: DOM code -> key chosen when it went down
-    this.recentPresses = [];   // unlocked: last matrix presses, to learn which key typed a character
     this.prefs = {
       hints: true, hands: true, bar: true, hideMtKeymap: true, modules: false, size: 1, hostLayout: 'auto',
       ...store.get('prefs', {}),
@@ -372,12 +371,14 @@ class HalcyonMonkeytype {
       if (!current()) return;
       const before = new Set(this.model.held.keys());
       if (this.model.update(pressed, performance.now())) {
+        let learned = false;
         for (const p of pressed) {
           if (before.has(p)) continue;
           this.lastPressed = p;
           const rec = this.model.held.get(p);
-          if (rec) this.recentPresses = [...this.recentPresses.slice(-7), { pos: p, layer: rec.layer, downAt: rec.downAt }];
+          if (rec?.role === 'active') learned = this.index.learnPress(p, rec.layer, this.model.snapshot().mods) || learned;
         }
+        if (learned) this.#savePreferred();
         this.render();
       }
     });
@@ -542,12 +543,8 @@ class HalcyonMonkeytype {
   // ---------------------------------------------------------------- preferred keys
 
   #onKeydown(e) {
+    if (this.matrix) return;
     const ch = e.key.length === 1 ? e.key : null;
-    if (this.matrix) {
-      // the matrix poll may see the press a few ms after the DOM event
-      if (ch) setTimeout(() => this.#learn(ch, e.code), 60);
-      return;
-    }
     const expectedChar = this.#nextChar();
     const expected = expectedChar ? this.index.pathFor(expectedChar) : null;
     const hit = this.index.resolveTyped(e.code, ch, expected, [this.view.layer, this.model.defaultLayer]);
@@ -556,8 +553,7 @@ class HalcyonMonkeytype {
     this.lastPressed = hit.pos;
   }
 
-  #learn(ch, code) {
-    if (!this.kb || !this.index.learn(ch, code, this.recentPresses.filter((p) => performance.now() - p.downAt < 500))) return;
+  #savePreferred() {
     store.set('paths.' + this.kb.uid, this.kb.preferred);
     this.lastHintChar = undefined;
     this.#updateHint();

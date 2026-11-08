@@ -43,7 +43,8 @@ Im Menü **⌨ Split** stellst du außerdem ein:
 ### Mehrere Wege zum selben Zeichen
 
 Liegt ein Zeichen auf mehreren Tasten (z. B. „1“ in der Zahlenreihe und auf einem Layer), merkt sich die App den
-Weg, den du zuletzt benutzt hast, und zeigt ihn als nächste Taste. Gelernt wird im entsperrten Modus; gesperrt nutzt
+Weg, den du zuletzt benutzt hast, und zeigt ihn als nächste Taste. Gelernt wird im entsperrten Modus direkt aus der
+Tastatur, egal welches Fenster den Fokus hat; gesperrt nutzt
 die App das Gemerkte und den Weg, den sie für das erwartete Zeichen vorgeschlagen hat. Im Menü: **Vergessen**.
 
 Nach Änderungen am Code: `node tools/build-monkeytype.mjs`, dann unter `chrome://extensions` die Erweiterung neu laden.
