@@ -15,7 +15,7 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
 
 ### Tests
 - [ ] Mit echter VIA-Tastatur testen (bisher nur mit simulierter VIA-Firmware).
-- [ ] Nach Neuladen der Erweiterung: Elora und W-CORNE kurz gegenprüfen (Vial-Erkennung wurde umgebaut).
+- [ ] W-CORNE nach dem Umbau der Vial-Erkennung gegenprüfen (war beim Test abgesteckt).
 
 ## Grenzen (nicht lösbar ohne Firmware-Änderung)
 - Gesperrt sieht die App reine Layer-Tasten (MO, LT …) nicht, weil sie dem PC nichts schicken. Ein Layer erscheint
@@ -23,6 +23,7 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
 
 ## Erledigt
+- [x] Elora nach Umbau der Vial-Erkennung: als Vial 6 erkannt, live, Vorlieben erhalten, Keymap gespeichert.
 - [x] FR: VIA-Tastaturen (Overlay und eigenständige App): Layout-Datei einmal laden, pro Tastatur gespeichert, sofort live.
 - [x] Bug: VIA-Firmware wäre als „Vial-Protokoll 255“ durchgerutscht; Erkennung korrigiert.
 - [x] FR: Keymap merken – Overlay und eigenständige App zeigen die zuletzt gelesene Keymap ohne Verbindung.
