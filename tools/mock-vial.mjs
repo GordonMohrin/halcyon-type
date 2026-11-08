@@ -44,6 +44,8 @@ export class MockVialDevice extends EventTarget {
 
   #handle(msg) {
     const d = this.demo;
+    // vial-qmk: while an unlock is in progress only these Vial commands are answered
+    if (this.inProgress && !(msg[0] === 0xfe && [0x00, 0x01, 0x02, 0x05, 0x06, 0x07].includes(msg[1]))) return msg;
     const { rows, cols } = d.definition.matrix;
     const now = performance.now();
     if (msg[0] === 0x01) { msg[1] = 0; msg[2] = 12; return msg; }

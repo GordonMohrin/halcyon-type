@@ -301,7 +301,9 @@ class HalcyonMonkeytype {
       await transport.open();
       const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
       this.statusEl.textContent = 'lädt …';
-      await vial.load((f) => { this.statusEl.textContent = `lädt ${Math.round(f * 100)} %`; });
+      await vial.load((f, what) => {
+        this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
+      });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       this.setupKeyboard({
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,

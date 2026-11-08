@@ -72,6 +72,22 @@ const posOf = (layer, kc) => {
   await t.close();
 }
 
+// an unlock left in progress (page reloaded while holding the keys) is finished before loading
+{
+  const definitionXz = readFileSync(new URL('./fixtures/halcyon-kyria.def.xz', import.meta.url));
+  const dev = new MockVialDevice(demo, { counterMax: 3, definitionXz });
+  const t = new HidTransport(dev);
+  await t.open();
+  const kb = new VialKeyboard(t, dev.productName);
+  await kb.unlockStart();
+  const texts = [];
+  setTimeout(() => dev.press('0,1', '4,1'), 300);
+  await kb.load((f, what) => texts.push(what));
+  check('load finishes a pending unlock first', kb.unlocked && texts.some((s) => s.startsWith('Entsperren')));
+  check('keymap complete after pending unlock', kb.layerCount === 8 && JSON.stringify(kb.keymap) === JSON.stringify(demo.keymap));
+  await t.close();
+}
+
 // ---------------------------------------------------------------- layout
 {
   const all = parseVialLayout(demo.definition);

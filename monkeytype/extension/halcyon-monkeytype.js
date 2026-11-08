@@ -1046,7 +1046,13 @@ class VialKeyboard {
     this.rows = this.definition.matrix.rows;
     this.cols = this.definition.matrix.cols;
 
+    // An unlock left half-done (page reloaded while holding the keys) makes the firmware ignore
+    // everything but unlock commands, so keymap reads would come back empty: finish it first.
+    await this.refreshUnlockStatus();
+    if (this.unlockInProgress) await this.#finishUnlock(onProgress);
+
     this.layerCount = (await t.request([VIA.LAYER_COUNT], { echo: 1 }))[1];
+    if (!this.layerCount) throw new Error('Die Tastatur hat keine Keymap geliefert. Bitte ab- und wieder anstecken.');
 
     // Whole keymap buffer: layer -> row -> col, big-endian 16-bit keycodes.
     const total = this.layerCount * this.rows * this.cols * 2;
@@ -1081,6 +1087,16 @@ class VialKeyboard {
     await this.refreshUnlockStatus();
     onProgress(1, 'Fertig');
     return this;
+  }
+
+  async #finishUnlock(onProgress) {
+    const keys = this.unlockKeys.map(([r, c]) => `Zeile ${r}/Spalte ${c}`).join(' + ');
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 130)); // firmware rule: poll slower than every 100 ms
+      const res = await this.unlockPoll();
+      if (res.unlocked) return;
+      onProgress(0.5, `Entsperren abschließen: ${keys} halten`);
+    }
   }
 
   async #loadEncoders() {
@@ -2843,7 +2859,9 @@ class HalcyonMonkeytype {
       await transport.open();
       const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
       this.statusEl.textContent = 'lädt …';
-      await vial.load((f) => { this.statusEl.textContent = `lädt ${Math.round(f * 100)} %`; });
+      await vial.load((f, what) => {
+        this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
+      });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       this.setupKeyboard({
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
