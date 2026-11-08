@@ -1,4 +1,4 @@
-# Ergo Keyboard for Monkeytype
+# Split Keyboard for monkeytype
 
 Live-Anzeige deiner Vial-Tastatur für **monkeytype.com**. Funktioniert mit jeder Tastatur mit Vial-Firmware,
 ohne etwas an der Firmware zu ändern; entstanden für die splitkb **Halcyon**-Reihe (Kyria, Corne, Lily58, Elora, Ferris, Sofle).
@@ -18,14 +18,14 @@ Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modif
 **Variante A – Chrome-Erweiterung** (empfohlen)
 1. `chrome://extensions` öffnen und oben rechts den **Entwicklermodus** einschalten.
 2. **Entpackte Erweiterung laden** und den Ordner `monkeytype/extension` aus diesem Repo wählen.
-3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Ergo**: anklicken, **Tastatur verbinden**, die Tastatur wählen.
+3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Split**: anklicken, **Tastatur verbinden**, die Tastatur wählen.
 4. **Entsperren**: Die App zeigt die Tasten, die du halten musst (Halcyon Kyria ab Werk **T + Y**, ca. 6 s).
    Solange blockiert sie die Eingabe in monkeytype, damit nichts im Test landet.
 
 **Variante B – Userscript**: `monkeytype/halcyon-monkeytype.user.js` in Tampermonkey oder Violentmonkey installieren.
 
 Ab dann verbindet sich die Tastatur beim Öffnen von monkeytype automatisch. Das Entsperren gilt bis zum Abstecken.
-Im Menü **⌨ Ergo** stellst du außerdem ein:
+Im Menü **⌨ Split** stellst du außerdem ein:
 - Systemlayout (Deutsch Mac/Windows, US)
 - Basis-Layer
 - Hände, Hinweise und Layer-Leiste an oder aus
@@ -47,7 +47,7 @@ Weg, den du zuletzt benutzt hast, und zeigt ihn als nächste Taste. Gelernt wird
 die App das Gemerkte und den Weg, den sie für das erwartete Zeichen vorgeschlagen hat. Im Menü: **Vergessen**.
 
 Nach Änderungen am Code: `node tools/build-monkeytype.mjs`, dann unter `chrome://extensions` die Erweiterung neu laden.
-Der Build legt auch das Store-Paket `dist/ergo-keyboard-for-monkeytype-<version>.zip` an.
+Der Build legt auch das Store-Paket `dist/split-keyboard-for-monkeytype-<version>.zip` an.
 
 ## Lizenz
 

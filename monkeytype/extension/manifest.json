@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Ergo Keyboard for Monkeytype",
+  "name": "Split Keyboard for monkeytype",
   "version": "0.2.0",
   "description": "Shows your Vial keyboard live in monkeytype: layers, modifiers, next key and fingers.",
   "homepage_url": "https://github.com/GordonMohrin/halcyon-type",

@@ -1,4 +1,4 @@
-// Ergo Keyboard for Monkeytype — live Vial keyboard inside monkeytype.com.
+// Split Keyboard for monkeytype — live Vial keyboard inside monkeytype.com.
 // Runs in the page (extension content script with world MAIN, or userscript), so you
 // type in the real monkeytype with your own account; this only adds the keyboard below
 // the words. Styling follows monkeytype's keymap (theme colors, next-key highlight,
@@ -95,10 +95,10 @@ class HalcyonMonkeytype {
     this.view = new KeyboardView(this.kbdEl, { fontScale: 0.78 });
     this.hands = new HandsView(this.handsEl);
 
-    this.statusEl = h('span', { class: 'hmt-status' }, 'Ergo');
+    this.statusEl = h('span', { class: 'hmt-status' }, 'Split');
     this.menuEl = h('div', { class: 'hmt-menu', hidden: true });
     this.pill = h('div', { class: 'hmt-pill' },
-      h('button', { class: 'hmt-pill-btn', title: 'Ergo Keyboard for Monkeytype', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
+      h('button', { class: 'hmt-pill-btn', title: 'Split Keyboard for monkeytype', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
       this.menuEl);
     document.body.appendChild(this.pill);
     document.addEventListener('click', (e) => { if (!this.menuEl.hidden && !this.pill.contains(e.target)) this.menuEl.hidden = true; });
@@ -135,7 +135,7 @@ class HalcyonMonkeytype {
         if (key === 'modules' && this.kb) this.setupKeyboard(this.kbData);
       } }), label);
 
-    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Ergo Keyboard for Monkeytype'));
+    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Split Keyboard for monkeytype'));
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
     const actions = row();
     if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
@@ -176,7 +176,7 @@ class HalcyonMonkeytype {
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Ergo' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();

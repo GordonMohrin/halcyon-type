@@ -1,7 +1,7 @@
 // Bundles monkeytype/overlay.js and its ES-module imports into one classic script and writes
 //   monkeytype/extension/            unpacked Chrome extension (Manifest V3, content script in the page world)
 //   monkeytype/halcyon-monkeytype.user.js   userscript for Tampermonkey/Violentmonkey
-//   dist/ergo-keyboard-for-monkeytype-<version>.zip   package for the extension stores
+//   dist/split-keyboard-for-monkeytype-<version>.zip   package for the extension stores
 // Run: node tools/build-monkeytype.mjs
 
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
 import { crc32 } from './make-icons.mjs';
 
-const NAME = 'Ergo Keyboard for Monkeytype';
+const NAME = 'Split Keyboard for monkeytype';
 const DESCRIPTION = 'Shows your Vial keyboard live in monkeytype: layers, modifiers, next key and fingers.';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -141,7 +141,7 @@ const files = (dir, prefix = '') => readdirSync(dir, { withFileTypes: true }).fl
   e.isDirectory() ? files(resolve(dir, e.name), prefix + e.name + '/') : [[prefix + e.name, readFileSync(resolve(dir, e.name))]]);
 const distDir = resolve(root, 'dist');
 mkdirSync(distDir, { recursive: true });
-const zipName = `ergo-keyboard-for-monkeytype-${VERSION}.zip`;
+const zipName = `split-keyboard-for-monkeytype-${VERSION}.zip`;
 writeFileSync(resolve(distDir, zipName), zip(files(extDir).sort(([a], [b]) => a.localeCompare(b))));
 
 console.log(`built ${order.length} modules, ${(bundle.length / 1024).toFixed(0)} KB -> monkeytype/extension/, monkeytype/halcyon-monkeytype.user.js, dist/${zipName}`);
