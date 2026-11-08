@@ -68,7 +68,7 @@ for (const file of order) {
 
 const banner = `/*!
  * ${NAME} ${VERSION} — live Vial keyboard for monkeytype.com
- * https://github.com/GordonMohrin/halcyon-type
+ * https://github.com/GordonMohrin/split-keyboard-for-monkeytype
  * Copyright (C) 2026 Gordon Mohrin. License: GPL-3.0-or-later (see LICENSE).
  * Keymap look and behavior adapted from monkeytype (https://github.com/monkeytypegame/monkeytype, GPL-3.0).
  */`;
@@ -87,7 +87,7 @@ writeFileSync(resolve(extDir, 'manifest.json'), JSON.stringify({
   name: NAME,
   version: VERSION,
   description: DESCRIPTION,
-  homepage_url: 'https://github.com/GordonMohrin/halcyon-type',
+  homepage_url: 'https://github.com/GordonMohrin/split-keyboard-for-monkeytype',
   icons: Object.fromEntries(iconSizes.map((s) => [s, `icons/icon-${s}.png`])),
   content_scripts: [{
     matches: ['https://monkeytype.com/*'],
@@ -100,7 +100,7 @@ writeFileSync(resolve(extDir, 'manifest.json'), JSON.stringify({
 // ------------------------------------------------------------------ userscript
 const header = `// ==UserScript==
 // @name         ${NAME}
-// @namespace    https://github.com/GordonMohrin/halcyon-type
+// @namespace    https://github.com/GordonMohrin/split-keyboard-for-monkeytype
 // @version      ${VERSION}
 // @description  ${DESCRIPTION}
 // @match        https://monkeytype.com/*

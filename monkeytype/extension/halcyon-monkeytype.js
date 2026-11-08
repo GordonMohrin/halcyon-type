@@ -1,6 +1,6 @@
 /*!
  * Split Keyboard for monkeytype 0.3.0 — live Vial keyboard for monkeytype.com
- * https://github.com/GordonMohrin/halcyon-type
+ * https://github.com/GordonMohrin/split-keyboard-for-monkeytype
  * Copyright (C) 2026 Gordon Mohrin. License: GPL-3.0-or-later (see LICENSE).
  * Keymap look and behavior adapted from monkeytype (https://github.com/monkeytypegame/monkeytype, GPL-3.0).
  */
