@@ -198,6 +198,14 @@ const posOf = (layer, kc) => {
   check('locked: preference beats base layer', hit.pos === oeL4.pos && hit.layer === 4);
   check('shift press learns the shifted character only', idx.learnPress(oeBase.pos, 0, 0x02) && idx.kb.preferred['ö'] === '4:' + oeL4.pos
     && idx.kb.preferred['Ö'] === '0:' + oeBase.pos);
+  {
+    // a key with its own shift (S(KC_1) = "!") must not count that shift as held
+    const fm = new FirmwareModel([[[0xe1, 0x221, 0x1e]]]); // LSFT, S(KC_1), KC_1
+    fm.update(['0,1'], 0);
+    const own = fm.heldMods('0,1');
+    fm.update(['0,0', '0,2'], 10);
+    check('heldMods: own built-in shift ignored, held shift counted', own === 0 && fm.heldMods('0,2') === 0x02, own);
+  }
   check('learn ignores unambiguous chars', !idx.learnPress(one.target, 4, 0) && !('1' in idx.kb.preferred));
   idx.kb.preferred = {};
   check('space found', !!idx.pathFor(' '));

@@ -376,7 +376,7 @@ class HalcyonMonkeytype {
           if (before.has(p)) continue;
           this.lastPressed = p;
           const rec = this.model.held.get(p);
-          if (rec?.role === 'active') learned = this.index.learnPress(p, rec.layer, this.model.snapshot().mods) || learned;
+          if (rec?.role === 'active') learned = this.index.learnPress(p, rec.layer, this.model.heldMods(p)) || learned;
         }
         if (learned) this.#savePreferred();
         this.render();

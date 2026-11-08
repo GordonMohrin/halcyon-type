@@ -1897,6 +1897,13 @@ class FirmwareModel {
     this.version++;
   }
 
+  /** Modifiers applying to the key at pos: held by other keys, plus one-shots it consumed (not its own, e.g. S(KC_1)). */
+  heldMods(pos) {
+    let mods = this.held.get(pos)?.appliedOneShotMods || 0;
+    for (const rec of this.held.values()) if (rec.pos !== pos) mods |= rec.mods | rec.appliedOneShotMods;
+    return mods;
+  }
+
   /** Snapshot for rendering. */
   snapshot() {
     const mask = this.activeMask();
@@ -2949,7 +2956,7 @@ class HalcyonMonkeytype {
           if (before.has(p)) continue;
           this.lastPressed = p;
           const rec = this.model.held.get(p);
-          if (rec?.role === 'active') learned = this.index.learnPress(p, rec.layer, this.model.snapshot().mods) || learned;
+          if (rec?.role === 'active') learned = this.index.learnPress(p, rec.layer, this.model.heldMods(p)) || learned;
         }
         if (learned) this.#savePreferred();
         this.render();
