@@ -282,12 +282,14 @@ export class VialKeyboard {
   }
 }
 
-/** Find an already-permitted Vial device (no prompt). */
-export async function findGrantedDevice() {
+/** Find an already-permitted Vial device (no prompt), preferring the one with this "vendorId:productId". */
+export async function findGrantedDevice(preferredId) {
   if (!('hid' in navigator)) return null;
-  const devices = await navigator.hid.getDevices();
-  return devices.find(isRawHid) || null;
+  const devices = (await navigator.hid.getDevices()).filter(isRawHid);
+  return devices.find((d) => deviceId(d) === preferredId) || devices[0] || null;
 }
+
+export const deviceId = (device) => device.vendorId + ':' + device.productId;
 
 export function isRawHid(device) {
   return device.collections.some((c) => c.usagePage === RAW_HID_FILTER.usagePage && c.usage === RAW_HID_FILTER.usage);

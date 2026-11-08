@@ -1201,12 +1201,14 @@ class VialKeyboard {
   }
 }
 
-/** Find an already-permitted Vial device (no prompt). */
-async function findGrantedDevice() {
+/** Find an already-permitted Vial device (no prompt), preferring the one with this "vendorId:productId". */
+async function findGrantedDevice(preferredId) {
   if (!('hid' in navigator)) return null;
-  const devices = await navigator.hid.getDevices();
-  return devices.find(isRawHid) || null;
+  const devices = (await navigator.hid.getDevices()).filter(isRawHid);
+  return devices.find((d) => deviceId(d) === preferredId) || devices[0] || null;
 }
+
+const deviceId = (device) => device.vendorId + ':' + device.productId;
 
 function isRawHid(device) {
   return device.collections.some((c) => c.usagePage === RAW_HID_FILTER.usagePage && c.usage === RAW_HID_FILTER.usage);
@@ -1218,7 +1220,7 @@ async function requestDevice() {
   return devices.find(isRawHid) || null;
 }
 
-return { RAW_HID_FILTER, UNLOCK_COUNTER_MAX, HidTransport, VialKeyboard, findGrantedDevice, isRawHid, requestDevice };
+return { RAW_HID_FILTER, UNLOCK_COUNTER_MAX, HidTransport, VialKeyboard, findGrantedDevice, deviceId, isRawHid, requestDevice };
 })();
 // ---- js/keycodes.js
 const __m3 = (() => {
@@ -2561,7 +2563,7 @@ return { computeFingers, HandsView };
 })();
 // ---- monkeytype/overlay.js
 const __m8 = (() => {
-const { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } = __m2;
+const { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, UNLOCK_COUNTER_MAX } = __m2;
 const { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } = __m1;
 const { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } = __m3;
 const { FirmwareModel, DomKeyTracker, lockedSnapshot } = __m4;
@@ -2875,6 +2877,7 @@ class HalcyonMonkeytype {
         this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
       });
       Object.assign(this, { device, transport, vial, source: 'hid' });
+      store.set('lastDevice', deviceId(device));
       this.setupKeyboard({
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
         encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
@@ -3176,7 +3179,7 @@ class HalcyonMonkeytype {
   async start() {
     await this.applyHostLayout();
     this.#updateStatus();
-    const granted = await findGrantedDevice();
+    const granted = await findGrantedDevice(store.get('lastDevice', null));
     if (granted) await this.connect(granted);
   }
 }

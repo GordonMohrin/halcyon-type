@@ -4,7 +4,7 @@
 // the words. Styling follows monkeytype's keymap (theme colors, next-key highlight,
 // 250 ms correct/error flash), see LICENSE (GPL-3.0) and monkeytype's Keymap.tsx.
 
-import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, UNLOCK_COUNTER_MAX } from '../js/hid.js';
+import { HidTransport, VialKeyboard, findGrantedDevice, requestDevice, isRawHid, deviceId, UNLOCK_COUNTER_MAX } from '../js/hid.js';
 import { parseVialLayout, parseLayoutLabels, unpackLayoutOptions, placeKeys, keyBounds } from '../js/kle.js';
 import { HOST_LAYOUTS, detectHostLayout, MOD_SYMBOLS, MOD_NAMES, KC_TRNS, KC_NO } from '../js/keycodes.js';
 import { FirmwareModel, DomKeyTracker, lockedSnapshot } from '../js/state.js';
@@ -305,6 +305,7 @@ class HalcyonMonkeytype {
         this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
       });
       Object.assign(this, { device, transport, vial, source: 'hid' });
+      store.set('lastDevice', deviceId(device));
       this.setupKeyboard({
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
         encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
@@ -606,7 +607,7 @@ class HalcyonMonkeytype {
   async start() {
     await this.applyHostLayout();
     this.#updateStatus();
-    const granted = await findGrantedDevice();
+    const granted = await findGrantedDevice(store.get('lastDevice', null));
     if (granted) await this.connect(granted);
   }
 }
