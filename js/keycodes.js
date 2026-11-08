@@ -88,10 +88,10 @@ export const MOD_KEYS = { 0xE0: MOD.LCTL, 0xE1: MOD.LSFT, 0xE2: MOD.LALT, 0xE3: 
 
 export const MOD_SYMBOLS = IS_MAC
   ? { ctrl: '⌃', shift: '⇧', alt: '⌥', gui: '⌘' }
-  : { ctrl: 'Strg', shift: '⇧', alt: 'Alt', gui: 'Win' };
+  : { ctrl: 'Ctrl', shift: '⇧', alt: 'Alt', gui: 'Win' };
 export const MOD_NAMES = IS_MAC
   ? { ctrl: 'Control', shift: 'Shift', alt: 'Option', gui: 'Command' }
-  : { ctrl: 'Strg', shift: 'Shift', alt: 'Alt', gui: 'Win' };
+  : { ctrl: 'Ctrl', shift: 'Shift', alt: 'Alt', gui: 'Win' };
 
 // Compact symbol string for an 8-bit HID modifier mask.
 export function modsSymbol(hidMods) {
@@ -111,8 +111,8 @@ function modsName(hidMods) {
   const add = (bitL, name) => {
     const l = hidMods & bitL, r = hidMods & (bitL << 4);
     if (l && r) parts.push(name);
-    else if (l) parts.push(name + ' links');
-    else if (r) parts.push(name + ' rechts');
+    else if (l) parts.push('left ' + name);
+    else if (r) parts.push('right ' + name);
   };
   add(0x01, MOD_NAMES.ctrl); add(0x02, MOD_NAMES.shift); add(0x04, MOD_NAMES.alt); add(0x08, MOD_NAMES.gui);
   return parts.join(' + ');
@@ -122,13 +122,13 @@ function modsName(hidMods) {
 // Structural decoding of a keycode
 
 const QUANTUM = {
-  0x7C00: ['Boot', 'Bootloader'], 0x7C01: ['Reboot', 'Neustart'], 0x7C02: ['Debug', 'Debug umschalten'],
-  0x7C03: ['EEPROM', 'EEPROM löschen'], 0x7C16: ['Esc~', 'Grave Escape'],
-  0x7C1A: ['⇧(', 'Space Cadet Shift links'], 0x7C1B: ['⇧)', 'Space Cadet Shift rechts'],
+  0x7C00: ['Boot', 'Bootloader'], 0x7C01: ['Reboot', 'Reboot'], 0x7C02: ['Debug', 'Toggle debug'],
+  0x7C03: ['EEPROM', 'Clear EEPROM'], 0x7C16: ['Esc~', 'Grave Escape'],
+  0x7C1A: ['⇧(', 'Space Cadet left Shift'], 0x7C1B: ['⇧)', 'Space Cadet right Shift'],
   0x7C73: ['CapsW', 'Caps Word'], 0x7C77: ['Lower', 'Tri-Layer Lower (Layer 1)'], 0x7C78: ['Upper', 'Tri-Layer Upper (Layer 2)'],
   0x7C79: ['Rep', 'Repeat Key'], 0x7C7A: ['AltRep', 'Alternate Repeat Key'], 0x7C7B: ['LLock', 'Layer Lock'],
-  0x7C53: ['Rec1', 'Dyn. Makro 1 aufnehmen'], 0x7C54: ['Rec2', 'Dyn. Makro 2 aufnehmen'], 0x7C55: ['RecStop', 'Aufnahme stoppen'],
-  0x7C56: ['Play1', 'Dyn. Makro 1'], 0x7C57: ['Play2', 'Dyn. Makro 2'],
+  0x7C53: ['Rec1', 'Record dynamic macro 1'], 0x7C54: ['Rec2', 'Record dynamic macro 2'], 0x7C55: ['RecStop', 'Stop recording'],
+  0x7C56: ['Play1', 'Dynamic macro 1'], 0x7C57: ['Play2', 'Dynamic macro 2'],
 };
 export const QK_CAPS_WORD_TOGGLE = 0x7C73;
 export const FN_MO13 = 0x7C77;
@@ -137,7 +137,7 @@ export const QK_LAYER_LOCK = 0x7C7B;
 
 const RGB_MATRIX = {
   0x7840: 'RGB on', 0x7841: 'RGB off', 0x7842: 'RGB ⏻', 0x7843: 'RGB →', 0x7844: 'RGB ←', 0x7845: 'Hue+', 0x7846: 'Hue−',
-  0x7847: 'Sat+', 0x7848: 'Sat−', 0x7849: 'Hell+', 0x784A: 'Hell−', 0x784B: 'Tempo+', 0x784C: 'Tempo−',
+  0x7847: 'Sat+', 0x7848: 'Sat−', 0x7849: 'Bri+', 0x784A: 'Bri−', 0x784B: 'Spd+', 0x784C: 'Spd−',
 };
 
 /**
@@ -233,9 +233,9 @@ function buildLayout(id, name, printable, altTable, altMode, swapYZ) {
 
 export const HOST_LAYOUTS = {
   us: buildLayout('us', 'US (QWERTY)', US_PRINTABLE, null, 'none', false),
-  'de-mac': buildLayout('de-mac', 'Deutsch (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
-  'de-win': buildLayout('de-win', 'Deutsch (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
-  eurkey: buildLayout('eurkey', 'EurKEY (US, Umlaute über AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
+  'de-mac': buildLayout('de-mac', 'German (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
+  'de-win': buildLayout('de-win', 'German (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
+  eurkey: buildLayout('eurkey', 'EurKEY (US, umlauts on AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
 };
 
 /** Best-effort detection of the OS keyboard layout via the Keyboard Map API. */
@@ -290,8 +290,8 @@ function basicLabel(hid, host, live) {
     const base = entry[0];
     const isLetter = !!entry[1] && entry[1] !== base && entry[1] === base.toUpperCase();
     const desc = isLetter
-      ? `Buchstabe ${base}`
-      : `Zeichen ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`;
+      ? `Letter ${base}`
+      : `Character ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`;
     const mods = live ? live.mods & 0xFF : 0;
     const typing = mods & 0x66; // shift / alt change the character
     if (typing) {
@@ -322,8 +322,8 @@ export function labelFor(kc, ctx, live = null) {
   const d = decode(kc);
   const host = ctx.host;
   switch (d.type) {
-    case 'none': return { main: '', cls: 'k-none', desc: 'Keine Funktion' };
-    case 'trns': return { main: '▽', cls: 'k-trns', desc: 'Transparent (Layer darunter)' };
+    case 'none': return { main: '', cls: 'k-none', desc: 'No function' };
+    case 'trns': return { main: '▽', cls: 'k-trns', desc: 'Transparent (layer below)' };
     case 'basic': return basicLabel(d.base, host, live);
     case 'mods': {
       const ch = charFor(d.base, d.mods, host);
@@ -334,20 +334,20 @@ export function labelFor(kc, ctx, live = null) {
     case 'modtap': {
       const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: modsSymbol(d.mods), cls: 'k-dual ' + tap.cls, dual: true,
-        desc: `Tippen: ${tap.desc} · Halten: ${modsName(d.mods)}` };
+        desc: `Tap: ${tap.desc} · Hold: ${modsName(d.mods)}` };
     }
     case 'layertap': {
       const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: 'L' + d.layer, cls: 'k-dual ' + tap.cls, dual: true,
-        desc: `Tippen: ${tap.desc} · Halten: Layer ${d.layer}` };
+        desc: `Tap: ${tap.desc} · Hold: layer ${d.layer}` };
     }
-    case 'layermod': return { main: 'L' + d.layer, sub: '+' + modsSymbol(d.mods), cls: 'k-layer', desc: `Layer ${d.layer} + ${modsName(d.mods)} (halten)` };
-    case 'mo': return { main: 'L' + d.layer, sub: 'MO', cls: 'k-layer', desc: `Layer ${d.layer} (halten)` };
-    case 'to': return { main: 'L' + d.layer, sub: 'TO', cls: 'k-layer', desc: `Zu Layer ${d.layer} wechseln` };
-    case 'df': return { main: 'L' + d.layer, sub: 'DF', cls: 'k-layer', desc: `Basis-Layer ${d.layer}` };
-    case 'pdf': return { main: 'L' + d.layer, sub: 'PDF', cls: 'k-layer', desc: `Basis-Layer ${d.layer} (dauerhaft)` };
-    case 'tg': return { main: 'L' + d.layer, sub: 'TG', cls: 'k-layer', desc: `Layer ${d.layer} umschalten` };
-    case 'tt': return { main: 'L' + d.layer, sub: 'TT', cls: 'k-layer', desc: `Layer ${d.layer} halten / mehrfach tippen zum Umschalten` };
+    case 'layermod': return { main: 'L' + d.layer, sub: '+' + modsSymbol(d.mods), cls: 'k-layer', desc: `Layer ${d.layer} + ${modsName(d.mods)} (hold)` };
+    case 'mo': return { main: 'L' + d.layer, sub: 'MO', cls: 'k-layer', desc: `Layer ${d.layer} (hold)` };
+    case 'to': return { main: 'L' + d.layer, sub: 'TO', cls: 'k-layer', desc: `Switch to layer ${d.layer}` };
+    case 'df': return { main: 'L' + d.layer, sub: 'DF', cls: 'k-layer', desc: `Base layer ${d.layer}` };
+    case 'pdf': return { main: 'L' + d.layer, sub: 'PDF', cls: 'k-layer', desc: `Base layer ${d.layer} (persistent)` };
+    case 'tg': return { main: 'L' + d.layer, sub: 'TG', cls: 'k-layer', desc: `Toggle layer ${d.layer}` };
+    case 'tt': return { main: 'L' + d.layer, sub: 'TT', cls: 'k-layer', desc: `Layer ${d.layer}: hold, or tap repeatedly to toggle` };
     case 'osl': return { main: 'L' + d.layer, sub: 'OSL', cls: 'k-layer', desc: `One-Shot Layer ${d.layer}` };
     case 'osm': return { main: modsSymbol(d.mods), sub: 'OSM', cls: 'k-mod', desc: `One-Shot ${modsName(d.mods)}` };
     case 'td': {
@@ -355,24 +355,24 @@ export function labelFor(kc, ctx, live = null) {
       if (td && td.onTap) {
         const tap = labelFor(td.onTap, ctx, live);
         return { main: tap.main, sub: 'TD' + d.index, cls: 'k-dual ' + tap.cls, dual: !!td.onHold,
-          desc: `Tap Dance ${d.index}: Tippen ${tap.desc}${td.onHold ? ' · Halten ' + labelFor(td.onHold, ctx).desc : ''}` };
+          desc: `Tap Dance ${d.index}: tap ${tap.desc}${td.onHold ? ' · hold ' + labelFor(td.onHold, ctx).desc : ''}` };
       }
       return { main: 'TD' + d.index, cls: 'k-misc', desc: `Tap Dance ${d.index}` };
     }
-    case 'macro': return { main: 'M' + d.index, cls: 'k-misc', desc: `Makro ${d.index}` };
+    case 'macro': return { main: 'M' + d.index, cls: 'k-misc', desc: `Macro ${d.index}` };
     case 'kb': {
       const ck = ctx.customKeycodes && ctx.customKeycodes[d.index];
       if (ck) return { main: (ck.shortName || ck.name || '').replace(/\\n/g, '\n'), cls: 'k-misc', desc: ck.title || ck.name || '' };
-      return { main: 'USER' + String(d.index).padStart(2, '0'), cls: 'k-misc', desc: `Eigener Keycode ${d.index}` };
+      return { main: 'USER' + String(d.index).padStart(2, '0'), cls: 'k-misc', desc: `Custom keycode ${d.index}` };
     }
     case 'quantum': {
       const q = QUANTUM[d.code];
       if (q) return { main: q[0], cls: 'k-misc', desc: q[1] };
       return { main: 'QK', sub: d.code.toString(16), cls: 'k-misc', desc: 'Quantum 0x' + d.code.toString(16) };
     }
-    case 'lighting': return { main: RGB_MATRIX[d.code] || 'RGB', cls: 'k-misc', desc: 'Beleuchtung' };
+    case 'lighting': return { main: RGB_MATRIX[d.code] || 'RGB', cls: 'k-misc', desc: 'Lighting' };
     case 'swap': return { main: 'SH', cls: 'k-misc', desc: 'Swap Hands' };
-    case 'magic': return { main: 'Magic', cls: 'k-misc', desc: 'Magic-Keycode' };
+    case 'magic': return { main: 'Magic', cls: 'k-misc', desc: 'Magic keycode' };
     case 'midi': return { main: 'MIDI', cls: 'k-misc', desc: 'MIDI' };
     case 'unicode': return { main: 'U+', cls: 'k-misc', desc: 'Unicode' };
     default: return { main: '0x' + kc.toString(16).toUpperCase(), cls: 'k-misc', desc: 'Keycode 0x' + kc.toString(16) };

@@ -83,7 +83,7 @@ const posOf = (layer, kc) => {
   const texts = [];
   setTimeout(() => dev.press('0,1', '4,1'), 300);
   await kb.load((f, what) => texts.push(what));
-  check('load finishes a pending unlock first', kb.unlocked && texts.some((s) => s.startsWith('Entsperren')));
+  check('load finishes a pending unlock first', kb.unlocked && texts.some((s) => s?.startsWith('Finishing unlock')));
   check('keymap complete after pending unlock', kb.layerCount === 8 && JSON.stringify(kb.keymap) === JSON.stringify(demo.keymap));
   await t.close();
 }

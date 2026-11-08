@@ -1,49 +1,46 @@
 # Backlog
 
-Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben in jeder Liste.
+Feature requests (FR) and bugs for Split Keyboard for monkeytype. Newest first in each list.
 
-## Offen
+## Open
 
 ### Bugs
-- (keine bekannten)
+- (none known)
 
-### Feature-Wünsche
-- [ ] **Store-Release vorbereiten**: Texte auf Englisch (Deutsch als Übersetzung), Erklärung beim ersten Start
-  (Entsperren gilt bis zum Abstecken, Vial-App dabei schließen), Datenschutzerklärung (alles bleibt lokal),
-  Store-Eintrag mit Screenshots 1280×800, Test in frischem Chrome-Profil, Repo und Dateinamen auf den neuen Namen
-  umstellen. Danach Chrome Web Store (Konto: Gordon) und Edge Add-ons.
+### Feature requests
+- [ ] **Chrome Web Store release**: first-run explanation (unlock lasts until unplugged, close the Vial app),
+  store listing with 1280×800 screenshots, privacy policy page, test in a fresh Chrome profile, rename repo and file
+  names to the new name. Then Chrome Web Store and Edge Add-ons.
 
 ### Tests
-- [ ] Mit echter VIA-Tastatur testen (bisher nur mit simulierter VIA-Firmware).
-- [ ] W-CORNE nach dem Umbau der Vial-Erkennung gegenprüfen (war beim Test abgesteckt).
+- [ ] Test with a real VIA keyboard (so far only against simulated VIA firmware).
+- [ ] Re-check the W-CORNE after the Vial detection rework (it was unplugged during the check).
 
-## Grenzen (nicht lösbar ohne Firmware-Änderung)
-- Gesperrt sieht die App reine Layer-Tasten (MO, LT …) nicht, weil sie dem PC nichts schicken. Ein Layer erscheint
-  erst mit der ersten Taste, die darauf tippt. Für die Anzeige schon beim Halten einmal entsperren (gilt bis zum
-  Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
+## Limits (not solvable without firmware changes)
+- While locked, pure layer keys (MO, LT …) are invisible because they send nothing to the computer. A layer shows
+  with the first key typed on it. To see it while holding, unlock once (lasts until unplugged). A firmware extension
+  that reports the layer state was tried and dropped: users should not have to flash anything.
 
-## Erledigt
-- [x] Elora nach Umbau der Vial-Erkennung: als Vial 6 erkannt, live, Vorlieben erhalten, Keymap gespeichert.
-- [x] FR: VIA-Tastaturen (Overlay und eigenständige App): Layout-Datei einmal laden, pro Tastatur gespeichert, sofort live.
-- [x] Bug: VIA-Firmware wäre als „Vial-Protokoll 255“ durchgerutscht; Erkennung korrigiert.
-- [x] FR: Keymap merken – Overlay und eigenständige App zeigen die zuletzt gelesene Keymap ohne Verbindung.
-- [x] FR: Bevorzugte Tasten auch in der eigenständigen App (Lernen entsperrt, Nutzen gesperrt).
-- [x] Systemlayout: Gordon nutzt EurKEY (US + Umlaute über AltGr). „US“ war für die Grundtasten richtig;
-  EurKEY ist jetzt wählbar (automatisch nicht erkennbar, der Browser kennt nur die Grundbelegung).
-- [x] Test W-CORNE (Vial ohne Sperre, 4×12, 46 Tasten): verbindet live ohne Entsperren, Layout und Beschriftung
-  stimmen, L1/L2 beim Halten schalten live um, gedrückte Tasten auf dem Layer werden gezeigt.
-- [x] FR: Im Menü „Andere Tastatur“; monkeytype verbindet beim Öffnen die zuletzt benutzte Tastatur.
-- [x] Test Elora live: „!“ über die Layer-2-Taste gelernt, Menü zeigt „2 bevorzugte Tasten gemerkt“ + Vergessen.
-- [x] Bug: Lernen ignorierte Tasten mit eingebautem Shift (z. B. `S(KC_1)` = „!“ auf Layer 2).
-- [x] Bug: Lernen hing an Tastenereignissen der Seite und tat nichts, wenn ein anderes Fenster den Fokus hatte.
-  Jetzt direkt aus der Matrix.
-- [x] Bug: Neu geladen während eines laufenden Entsperrens → leere Keymap (0 Layer). Jetzt wird das Entsperren
-  zuerst abgeschlossen.
-- [x] Test Elora live: gesperrt (Layer 2 für „!“ über Vorliebe, „1“ auf der Basis), Modifier-Leiste ohne
-  Überlappung, entsperrt „3 über Layer 1“ gelernt und als Hinweis gezeigt.
-- [x] 0.2.0 – FR: Name „Split Keyboard for monkeytype“, Icons, Store-ZIP in `dist/`.
-- [x] 0.2.0 – FR: Liegt ein Zeichen auf mehreren Tasten, merkt sich die App den zuletzt benutzten Weg und zeigt ihn.
-  Gesperrt wählt sie die Taste über diese Vorliebe und das erwartete Zeichen.
-- [x] 0.2.0 – Bug: In der Layer-/Modifier-Leiste lagen Strg, Alt, Win und Shift übereinander.
-- [x] 0.2.0 – FR: Funktioniert ohne Firmware-Änderung (Layer-Meldung aus Fork und App entfernt).
-- [x] 0.1.x – Build, Tests und Starter für Windows.
+## Done
+- [x] 0.3.0 – UI, docs and error messages in English; README explains unlocking and keylogger protection.
+- [x] FR: VIA keyboards (extension and standalone trainer): load the layout file once, kept per keyboard, live at once.
+- [x] Bug: VIA firmware slipped through as "Vial protocol 255"; detection fixed.
+- [x] FR: Remember the keymap – show the last keymap read while not connected.
+- [x] FR: Preferred keys in the standalone trainer too.
+- [x] EurKEY host layout (US with umlauts on AltGr); can't be detected automatically, pick it in the menu.
+- [x] Elora after the Vial detection rework: detected as Vial 6, live, preferences kept, keymap stored.
+- [x] W-CORNE (Vial without lock, 4×12, 46 keys): connects live without unlocking, layout and labels right,
+  L1/L2 switch live while held.
+- [x] FR: "Other keyboard" in the menu; monkeytype reconnects the keyboard used last.
+- [x] Elora live: "!" via the layer-2 key learned; menu shows "2 preferred keys remembered" + Forget.
+- [x] Bug: learning ignored keys with built-in Shift (e.g. `S(KC_1)` = "!" on layer 2).
+- [x] Bug: learning waited for page key events and did nothing when another window had focus. Now from the matrix.
+- [x] Bug: reloading during an unlock left the keymap empty (0 layers). The unlock is now finished first.
+- [x] Elora live: locked ("!" on layer 2 via preference, "1" on the base layer), modifier bar without overlap,
+  unlocked "3 via layer 1" learned and shown as hint.
+- [x] 0.2.0 – FR: name "Split Keyboard for monkeytype", icons, store zip in `dist/`.
+- [x] 0.2.0 – FR: characters on several keys: remember the key used last and show it; while locked pick the key via
+  this preference and the expected character.
+- [x] 0.2.0 – Bug: Ctrl, Alt, Win and Shift overlapped in the layer/modifier bar.
+- [x] 0.2.0 – FR: works without firmware changes (layer report removed from fork and app).
+- [x] 0.1.x – build, tests and launcher on Windows.

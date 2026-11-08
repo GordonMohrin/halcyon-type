@@ -69,7 +69,7 @@ export class HidTransport {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiter = null;
-        reject(new Error('Zeitüberschreitung bei der Antwort der Tastatur'));
+        reject(new Error('The keyboard did not answer in time'));
       }, timeout);
       this.waiter = (data) => {
         for (let i = 0; i < echo; i++) if (data[i] !== buf[i]) return; // stray report, keep waiting
@@ -93,7 +93,7 @@ const le32 = (d, o) => (d[o] | (d[o + 1] << 8) | (d[o + 2] << 16) | (d[o + 3] <<
 const be32 = (d, o) => ((d[o] << 24) | (d[o + 1] << 16) | (d[o + 2] << 8) | d[o + 3]) >>> 0;
 
 export class VialKeyboard {
-  constructor(transport, name = 'Tastatur') {
+  constructor(transport, name = 'Keyboard') {
     this.t = transport;
     this.name = name;
   }
@@ -105,7 +105,7 @@ export class VialKeyboard {
    */
   async load(onProgress = () => {}, { viaDefinition = null } = {}) {
     const t = this.t;
-    onProgress(0.02, 'Protokoll');
+    onProgress(0.02, 'protocol');
     const via = await t.request([VIA.PROTOCOL_VERSION], { echo: 1 });
     this.viaProtocol = be16(via, 1);
 
@@ -132,7 +132,7 @@ export class VialKeyboard {
     }
 
     this.layerCount = (await t.request([VIA.LAYER_COUNT], { echo: 1 }))[1];
-    if (!this.layerCount) throw new Error('Die Tastatur hat keine Keymap geliefert. Bitte ab- und wieder anstecken.');
+    if (!this.layerCount) throw new Error('The keyboard returned no keymap. Please unplug it and plug it back in.');
 
     // Whole keymap buffer: layer -> row -> col, big-endian 16-bit keycodes.
     const total = this.layerCount * this.rows * this.cols * 2;
@@ -141,7 +141,7 @@ export class VialKeyboard {
       const n = Math.min(28, total - off);
       const data = await t.request([VIA.KEYMAP_GET_BUFFER, off >> 8, off & 0xff, n], { echo: 3 });
       buf.set(data.slice(4, 4 + n), off);
-      onProgress(0.5 + 0.35 * (off / total), 'Keymap');
+      onProgress(0.5 + 0.35 * (off / total), 'keymap');
     }
     this.keymap = [];
     for (let l = 0; l < this.layerCount; l++) {
@@ -160,32 +160,32 @@ export class VialKeyboard {
       this.layoutOptionsValue = be32(data, 2);
     }
 
-    onProgress(0.88, 'Encoder & Einstellungen');
+    onProgress(0.88, 'encoders & settings');
     if (this.isVia) {
       // no Vial extras; VIA never locks the switch matrix
       Object.assign(this, { encoders: {}, tapDances: [], unlocked: true, unlockInProgress: false, unlockKeys: [] });
       this.settings = { tappingTerm: 200, permissiveHold: false, holdOnOtherKeyPress: false, oneshotTimeout: 0, tappingToggle: 5 };
-      onProgress(1, 'Fertig');
+      onProgress(1, 'done');
       return this;
     }
     await this.#loadEncoders();
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
-    onProgress(1, 'Fertig');
+    onProgress(1, 'done');
     return this;
   }
 
   async #loadVialDefinition(onProgress) {
     const t = this.t;
     const sz = le32(await t.request([VIA.VIAL_PREFIX, VIAL.GET_SIZE]), 0);
-    if (!sz || sz > 1 << 20) throw new Error('Ungültige Größe der Vial-Definition: ' + sz);
+    if (!sz || sz > 1 << 20) throw new Error('Invalid Vial definition size: ' + sz);
     const payload = new Uint8Array(sz);
     const blocks = Math.ceil(sz / MSG_LEN);
     for (let b = 0; b < blocks; b++) {
       const data = await t.request([VIA.VIAL_PREFIX, VIAL.GET_DEF, b & 0xff, (b >> 8) & 0xff, 0, 0]);
       payload.set(data.slice(0, Math.min(MSG_LEN, sz - b * MSG_LEN)), b * MSG_LEN);
-      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'Layout-Definition');
+      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'layout definition');
     }
     this.definition = JSON.parse(new TextDecoder().decode(xzDecompress(payload)));
   }
@@ -195,10 +195,10 @@ export class VialKeyboard {
     this.vialProtocol = null;
     this.uid = 'via-' + (dev.vendorId ?? 0).toString(16).padStart(4, '0') + (dev.productId ?? 0).toString(16).padStart(4, '0');
     if (this.viaProtocol < 12) {
-      throw new Error(`VIA-Protokoll ${this.viaProtocol} ist zu alt (QMK vor 2022). Bitte die Firmware aktualisieren.`);
+      throw new Error(`VIA protocol ${this.viaProtocol} is too old (QMK before 2022). Please update the firmware.`);
     }
     if (!def) {
-      const err = new Error('Diese Tastatur hat VIA statt Vial. Für das Layout wird ihre VIA-Definition (JSON) gebraucht.');
+      const err = new Error('This keyboard runs VIA, not Vial. Its layout needs the VIA definition (JSON).');
       err.code = 'needsDefinition';
       throw err;
     }
@@ -208,12 +208,12 @@ export class VialKeyboard {
   }
 
   async #finishUnlock(onProgress) {
-    const keys = this.unlockKeys.map(([r, c]) => `Zeile ${r}/Spalte ${c}`).join(' + ');
+    const keys = this.unlockKeys.map(([r, c]) => `row ${r}/column ${c}`).join(' + ');
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, 130)); // firmware rule: poll slower than every 100 ms
       const res = await this.unlockPoll();
       if (res.unlocked) return;
-      onProgress(0.5, `Entsperren abschließen: ${keys} halten`);
+      onProgress(0.5, `Finishing unlock: hold ${keys}`);
     }
   }
 
@@ -322,12 +322,12 @@ export class VialKeyboard {
 /** Why a VIA definition JSON doesn't fit this device, or null if it does. */
 export function checkViaDefinition(def, device) {
   if (!def || typeof def !== 'object' || !def.matrix?.rows || !def.matrix?.cols || !Array.isArray(def.layouts?.keymap)) {
-    return 'Das ist keine VIA-Definition (es fehlen matrix oder layouts.keymap).';
+    return 'This is not a VIA definition (matrix or layouts.keymap is missing).';
   }
   const id = (v) => (typeof v === 'string' ? parseInt(v, 16) : v);
   if (device && def.vendorId !== undefined && def.productId !== undefined
     && (id(def.vendorId) !== device.vendorId || id(def.productId) !== device.productId)) {
-    return `Die Definition gehört zu einer anderen Tastatur (${def.name || 'unbekannt'}).`;
+    return `This definition belongs to another keyboard (${def.name || 'unknown'}).`;
   }
   return null;
 }

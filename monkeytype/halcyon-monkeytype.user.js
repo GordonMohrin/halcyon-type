@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         Split Keyboard for monkeytype
 // @namespace    https://github.com/GordonMohrin/halcyon-type
-// @version      0.2.0
-// @description  Shows your Vial keyboard live in monkeytype: layers, modifiers, next key and fingers.
+// @version      0.3.0
+// @description  Shows your Vial or VIA keyboard live in monkeytype: your keymap, layers, the next key and the finger to use.
 // @match        https://monkeytype.com/*
 // @grant        none
 // @run-at       document-idle
 // @license      GPL-3.0-or-later
 // ==/UserScript==
 /*!
- * Split Keyboard for monkeytype 0.2.0 — live Vial keyboard for monkeytype.com
+ * Split Keyboard for monkeytype 0.3.0 — live Vial keyboard for monkeytype.com
  * https://github.com/GordonMohrin/halcyon-type
  * Copyright (C) 2026 Gordon Mohrin. License: GPL-3.0-or-later (see LICENSE).
  * Keymap look and behavior adapted from monkeytype (https://github.com/monkeytypegame/monkeytype, GPL-3.0).
@@ -998,7 +998,7 @@ class HidTransport {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiter = null;
-        reject(new Error('Zeitüberschreitung bei der Antwort der Tastatur'));
+        reject(new Error('The keyboard did not answer in time'));
       }, timeout);
       this.waiter = (data) => {
         for (let i = 0; i < echo; i++) if (data[i] !== buf[i]) return; // stray report, keep waiting
@@ -1022,7 +1022,7 @@ const le32 = (d, o) => (d[o] | (d[o + 1] << 8) | (d[o + 2] << 16) | (d[o + 3] <<
 const be32 = (d, o) => ((d[o] << 24) | (d[o + 1] << 16) | (d[o + 2] << 8) | d[o + 3]) >>> 0;
 
 class VialKeyboard {
-  constructor(transport, name = 'Tastatur') {
+  constructor(transport, name = 'Keyboard') {
     this.t = transport;
     this.name = name;
   }
@@ -1034,7 +1034,7 @@ class VialKeyboard {
    */
   async load(onProgress = () => {}, { viaDefinition = null } = {}) {
     const t = this.t;
-    onProgress(0.02, 'Protokoll');
+    onProgress(0.02, 'protocol');
     const via = await t.request([VIA.PROTOCOL_VERSION], { echo: 1 });
     this.viaProtocol = be16(via, 1);
 
@@ -1061,7 +1061,7 @@ class VialKeyboard {
     }
 
     this.layerCount = (await t.request([VIA.LAYER_COUNT], { echo: 1 }))[1];
-    if (!this.layerCount) throw new Error('Die Tastatur hat keine Keymap geliefert. Bitte ab- und wieder anstecken.');
+    if (!this.layerCount) throw new Error('The keyboard returned no keymap. Please unplug it and plug it back in.');
 
     // Whole keymap buffer: layer -> row -> col, big-endian 16-bit keycodes.
     const total = this.layerCount * this.rows * this.cols * 2;
@@ -1070,7 +1070,7 @@ class VialKeyboard {
       const n = Math.min(28, total - off);
       const data = await t.request([VIA.KEYMAP_GET_BUFFER, off >> 8, off & 0xff, n], { echo: 3 });
       buf.set(data.slice(4, 4 + n), off);
-      onProgress(0.5 + 0.35 * (off / total), 'Keymap');
+      onProgress(0.5 + 0.35 * (off / total), 'keymap');
     }
     this.keymap = [];
     for (let l = 0; l < this.layerCount; l++) {
@@ -1089,32 +1089,32 @@ class VialKeyboard {
       this.layoutOptionsValue = be32(data, 2);
     }
 
-    onProgress(0.88, 'Encoder & Einstellungen');
+    onProgress(0.88, 'encoders & settings');
     if (this.isVia) {
       // no Vial extras; VIA never locks the switch matrix
       Object.assign(this, { encoders: {}, tapDances: [], unlocked: true, unlockInProgress: false, unlockKeys: [] });
       this.settings = { tappingTerm: 200, permissiveHold: false, holdOnOtherKeyPress: false, oneshotTimeout: 0, tappingToggle: 5 };
-      onProgress(1, 'Fertig');
+      onProgress(1, 'done');
       return this;
     }
     await this.#loadEncoders();
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
-    onProgress(1, 'Fertig');
+    onProgress(1, 'done');
     return this;
   }
 
   async #loadVialDefinition(onProgress) {
     const t = this.t;
     const sz = le32(await t.request([VIA.VIAL_PREFIX, VIAL.GET_SIZE]), 0);
-    if (!sz || sz > 1 << 20) throw new Error('Ungültige Größe der Vial-Definition: ' + sz);
+    if (!sz || sz > 1 << 20) throw new Error('Invalid Vial definition size: ' + sz);
     const payload = new Uint8Array(sz);
     const blocks = Math.ceil(sz / MSG_LEN);
     for (let b = 0; b < blocks; b++) {
       const data = await t.request([VIA.VIAL_PREFIX, VIAL.GET_DEF, b & 0xff, (b >> 8) & 0xff, 0, 0]);
       payload.set(data.slice(0, Math.min(MSG_LEN, sz - b * MSG_LEN)), b * MSG_LEN);
-      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'Layout-Definition');
+      if (b % 8 === 0) onProgress(0.05 + 0.45 * (b / blocks), 'layout definition');
     }
     this.definition = JSON.parse(new TextDecoder().decode(xzDecompress(payload)));
   }
@@ -1124,10 +1124,10 @@ class VialKeyboard {
     this.vialProtocol = null;
     this.uid = 'via-' + (dev.vendorId ?? 0).toString(16).padStart(4, '0') + (dev.productId ?? 0).toString(16).padStart(4, '0');
     if (this.viaProtocol < 12) {
-      throw new Error(`VIA-Protokoll ${this.viaProtocol} ist zu alt (QMK vor 2022). Bitte die Firmware aktualisieren.`);
+      throw new Error(`VIA protocol ${this.viaProtocol} is too old (QMK before 2022). Please update the firmware.`);
     }
     if (!def) {
-      const err = new Error('Diese Tastatur hat VIA statt Vial. Für das Layout wird ihre VIA-Definition (JSON) gebraucht.');
+      const err = new Error('This keyboard runs VIA, not Vial. Its layout needs the VIA definition (JSON).');
       err.code = 'needsDefinition';
       throw err;
     }
@@ -1137,12 +1137,12 @@ class VialKeyboard {
   }
 
   async #finishUnlock(onProgress) {
-    const keys = this.unlockKeys.map(([r, c]) => `Zeile ${r}/Spalte ${c}`).join(' + ');
+    const keys = this.unlockKeys.map(([r, c]) => `row ${r}/column ${c}`).join(' + ');
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, 130)); // firmware rule: poll slower than every 100 ms
       const res = await this.unlockPoll();
       if (res.unlocked) return;
-      onProgress(0.5, `Entsperren abschließen: ${keys} halten`);
+      onProgress(0.5, `Finishing unlock: hold ${keys}`);
     }
   }
 
@@ -1251,12 +1251,12 @@ class VialKeyboard {
 /** Why a VIA definition JSON doesn't fit this device, or null if it does. */
 function checkViaDefinition(def, device) {
   if (!def || typeof def !== 'object' || !def.matrix?.rows || !def.matrix?.cols || !Array.isArray(def.layouts?.keymap)) {
-    return 'Das ist keine VIA-Definition (es fehlen matrix oder layouts.keymap).';
+    return 'This is not a VIA definition (matrix or layouts.keymap is missing).';
   }
   const id = (v) => (typeof v === 'string' ? parseInt(v, 16) : v);
   if (device && def.vendorId !== undefined && def.productId !== undefined
     && (id(def.vendorId) !== device.vendorId || id(def.productId) !== device.productId)) {
-    return `Die Definition gehört zu einer anderen Tastatur (${def.name || 'unbekannt'}).`;
+    return `This definition belongs to another keyboard (${def.name || 'unknown'}).`;
   }
   return null;
 }
@@ -1375,10 +1375,10 @@ const MOD_KEYS = { 0xE0: MOD.LCTL, 0xE1: MOD.LSFT, 0xE2: MOD.LALT, 0xE3: MOD.LGU
 
 const MOD_SYMBOLS = IS_MAC
   ? { ctrl: '⌃', shift: '⇧', alt: '⌥', gui: '⌘' }
-  : { ctrl: 'Strg', shift: '⇧', alt: 'Alt', gui: 'Win' };
+  : { ctrl: 'Ctrl', shift: '⇧', alt: 'Alt', gui: 'Win' };
 const MOD_NAMES = IS_MAC
   ? { ctrl: 'Control', shift: 'Shift', alt: 'Option', gui: 'Command' }
-  : { ctrl: 'Strg', shift: 'Shift', alt: 'Alt', gui: 'Win' };
+  : { ctrl: 'Ctrl', shift: 'Shift', alt: 'Alt', gui: 'Win' };
 
 // Compact symbol string for an 8-bit HID modifier mask.
 function modsSymbol(hidMods) {
@@ -1398,8 +1398,8 @@ function modsName(hidMods) {
   const add = (bitL, name) => {
     const l = hidMods & bitL, r = hidMods & (bitL << 4);
     if (l && r) parts.push(name);
-    else if (l) parts.push(name + ' links');
-    else if (r) parts.push(name + ' rechts');
+    else if (l) parts.push('left ' + name);
+    else if (r) parts.push('right ' + name);
   };
   add(0x01, MOD_NAMES.ctrl); add(0x02, MOD_NAMES.shift); add(0x04, MOD_NAMES.alt); add(0x08, MOD_NAMES.gui);
   return parts.join(' + ');
@@ -1409,13 +1409,13 @@ function modsName(hidMods) {
 // Structural decoding of a keycode
 
 const QUANTUM = {
-  0x7C00: ['Boot', 'Bootloader'], 0x7C01: ['Reboot', 'Neustart'], 0x7C02: ['Debug', 'Debug umschalten'],
-  0x7C03: ['EEPROM', 'EEPROM löschen'], 0x7C16: ['Esc~', 'Grave Escape'],
-  0x7C1A: ['⇧(', 'Space Cadet Shift links'], 0x7C1B: ['⇧)', 'Space Cadet Shift rechts'],
+  0x7C00: ['Boot', 'Bootloader'], 0x7C01: ['Reboot', 'Reboot'], 0x7C02: ['Debug', 'Toggle debug'],
+  0x7C03: ['EEPROM', 'Clear EEPROM'], 0x7C16: ['Esc~', 'Grave Escape'],
+  0x7C1A: ['⇧(', 'Space Cadet left Shift'], 0x7C1B: ['⇧)', 'Space Cadet right Shift'],
   0x7C73: ['CapsW', 'Caps Word'], 0x7C77: ['Lower', 'Tri-Layer Lower (Layer 1)'], 0x7C78: ['Upper', 'Tri-Layer Upper (Layer 2)'],
   0x7C79: ['Rep', 'Repeat Key'], 0x7C7A: ['AltRep', 'Alternate Repeat Key'], 0x7C7B: ['LLock', 'Layer Lock'],
-  0x7C53: ['Rec1', 'Dyn. Makro 1 aufnehmen'], 0x7C54: ['Rec2', 'Dyn. Makro 2 aufnehmen'], 0x7C55: ['RecStop', 'Aufnahme stoppen'],
-  0x7C56: ['Play1', 'Dyn. Makro 1'], 0x7C57: ['Play2', 'Dyn. Makro 2'],
+  0x7C53: ['Rec1', 'Record dynamic macro 1'], 0x7C54: ['Rec2', 'Record dynamic macro 2'], 0x7C55: ['RecStop', 'Stop recording'],
+  0x7C56: ['Play1', 'Dynamic macro 1'], 0x7C57: ['Play2', 'Dynamic macro 2'],
 };
 const QK_CAPS_WORD_TOGGLE = 0x7C73;
 const FN_MO13 = 0x7C77;
@@ -1424,7 +1424,7 @@ const QK_LAYER_LOCK = 0x7C7B;
 
 const RGB_MATRIX = {
   0x7840: 'RGB on', 0x7841: 'RGB off', 0x7842: 'RGB ⏻', 0x7843: 'RGB →', 0x7844: 'RGB ←', 0x7845: 'Hue+', 0x7846: 'Hue−',
-  0x7847: 'Sat+', 0x7848: 'Sat−', 0x7849: 'Hell+', 0x784A: 'Hell−', 0x784B: 'Tempo+', 0x784C: 'Tempo−',
+  0x7847: 'Sat+', 0x7848: 'Sat−', 0x7849: 'Bri+', 0x784A: 'Bri−', 0x784B: 'Spd+', 0x784C: 'Spd−',
 };
 
 /**
@@ -1520,9 +1520,9 @@ function buildLayout(id, name, printable, altTable, altMode, swapYZ) {
 
 const HOST_LAYOUTS = {
   us: buildLayout('us', 'US (QWERTY)', US_PRINTABLE, null, 'none', false),
-  'de-mac': buildLayout('de-mac', 'Deutsch (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
-  'de-win': buildLayout('de-win', 'Deutsch (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
-  eurkey: buildLayout('eurkey', 'EurKEY (US, Umlaute über AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
+  'de-mac': buildLayout('de-mac', 'German (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
+  'de-win': buildLayout('de-win', 'German (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
+  eurkey: buildLayout('eurkey', 'EurKEY (US, umlauts on AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
 };
 
 /** Best-effort detection of the OS keyboard layout via the Keyboard Map API. */
@@ -1577,8 +1577,8 @@ function basicLabel(hid, host, live) {
     const base = entry[0];
     const isLetter = !!entry[1] && entry[1] !== base && entry[1] === base.toUpperCase();
     const desc = isLetter
-      ? `Buchstabe ${base}`
-      : `Zeichen ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`;
+      ? `Letter ${base}`
+      : `Character ${base}${entry[1] ? ' (⇧ ' + entry[1] + ')' : ''}${entry[2] ? ' (' + MOD_SYMBOLS.alt + ' ' + entry[2] + ')' : ''}`;
     const mods = live ? live.mods & 0xFF : 0;
     const typing = mods & 0x66; // shift / alt change the character
     if (typing) {
@@ -1609,8 +1609,8 @@ function labelFor(kc, ctx, live = null) {
   const d = decode(kc);
   const host = ctx.host;
   switch (d.type) {
-    case 'none': return { main: '', cls: 'k-none', desc: 'Keine Funktion' };
-    case 'trns': return { main: '▽', cls: 'k-trns', desc: 'Transparent (Layer darunter)' };
+    case 'none': return { main: '', cls: 'k-none', desc: 'No function' };
+    case 'trns': return { main: '▽', cls: 'k-trns', desc: 'Transparent (layer below)' };
     case 'basic': return basicLabel(d.base, host, live);
     case 'mods': {
       const ch = charFor(d.base, d.mods, host);
@@ -1621,20 +1621,20 @@ function labelFor(kc, ctx, live = null) {
     case 'modtap': {
       const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: modsSymbol(d.mods), cls: 'k-dual ' + tap.cls, dual: true,
-        desc: `Tippen: ${tap.desc} · Halten: ${modsName(d.mods)}` };
+        desc: `Tap: ${tap.desc} · Hold: ${modsName(d.mods)}` };
     }
     case 'layertap': {
       const tap = basicLabel(d.base, host, live);
       return { main: tap.main, sub: 'L' + d.layer, cls: 'k-dual ' + tap.cls, dual: true,
-        desc: `Tippen: ${tap.desc} · Halten: Layer ${d.layer}` };
+        desc: `Tap: ${tap.desc} · Hold: layer ${d.layer}` };
     }
-    case 'layermod': return { main: 'L' + d.layer, sub: '+' + modsSymbol(d.mods), cls: 'k-layer', desc: `Layer ${d.layer} + ${modsName(d.mods)} (halten)` };
-    case 'mo': return { main: 'L' + d.layer, sub: 'MO', cls: 'k-layer', desc: `Layer ${d.layer} (halten)` };
-    case 'to': return { main: 'L' + d.layer, sub: 'TO', cls: 'k-layer', desc: `Zu Layer ${d.layer} wechseln` };
-    case 'df': return { main: 'L' + d.layer, sub: 'DF', cls: 'k-layer', desc: `Basis-Layer ${d.layer}` };
-    case 'pdf': return { main: 'L' + d.layer, sub: 'PDF', cls: 'k-layer', desc: `Basis-Layer ${d.layer} (dauerhaft)` };
-    case 'tg': return { main: 'L' + d.layer, sub: 'TG', cls: 'k-layer', desc: `Layer ${d.layer} umschalten` };
-    case 'tt': return { main: 'L' + d.layer, sub: 'TT', cls: 'k-layer', desc: `Layer ${d.layer} halten / mehrfach tippen zum Umschalten` };
+    case 'layermod': return { main: 'L' + d.layer, sub: '+' + modsSymbol(d.mods), cls: 'k-layer', desc: `Layer ${d.layer} + ${modsName(d.mods)} (hold)` };
+    case 'mo': return { main: 'L' + d.layer, sub: 'MO', cls: 'k-layer', desc: `Layer ${d.layer} (hold)` };
+    case 'to': return { main: 'L' + d.layer, sub: 'TO', cls: 'k-layer', desc: `Switch to layer ${d.layer}` };
+    case 'df': return { main: 'L' + d.layer, sub: 'DF', cls: 'k-layer', desc: `Base layer ${d.layer}` };
+    case 'pdf': return { main: 'L' + d.layer, sub: 'PDF', cls: 'k-layer', desc: `Base layer ${d.layer} (persistent)` };
+    case 'tg': return { main: 'L' + d.layer, sub: 'TG', cls: 'k-layer', desc: `Toggle layer ${d.layer}` };
+    case 'tt': return { main: 'L' + d.layer, sub: 'TT', cls: 'k-layer', desc: `Layer ${d.layer}: hold, or tap repeatedly to toggle` };
     case 'osl': return { main: 'L' + d.layer, sub: 'OSL', cls: 'k-layer', desc: `One-Shot Layer ${d.layer}` };
     case 'osm': return { main: modsSymbol(d.mods), sub: 'OSM', cls: 'k-mod', desc: `One-Shot ${modsName(d.mods)}` };
     case 'td': {
@@ -1642,24 +1642,24 @@ function labelFor(kc, ctx, live = null) {
       if (td && td.onTap) {
         const tap = labelFor(td.onTap, ctx, live);
         return { main: tap.main, sub: 'TD' + d.index, cls: 'k-dual ' + tap.cls, dual: !!td.onHold,
-          desc: `Tap Dance ${d.index}: Tippen ${tap.desc}${td.onHold ? ' · Halten ' + labelFor(td.onHold, ctx).desc : ''}` };
+          desc: `Tap Dance ${d.index}: tap ${tap.desc}${td.onHold ? ' · hold ' + labelFor(td.onHold, ctx).desc : ''}` };
       }
       return { main: 'TD' + d.index, cls: 'k-misc', desc: `Tap Dance ${d.index}` };
     }
-    case 'macro': return { main: 'M' + d.index, cls: 'k-misc', desc: `Makro ${d.index}` };
+    case 'macro': return { main: 'M' + d.index, cls: 'k-misc', desc: `Macro ${d.index}` };
     case 'kb': {
       const ck = ctx.customKeycodes && ctx.customKeycodes[d.index];
       if (ck) return { main: (ck.shortName || ck.name || '').replace(/\\n/g, '\n'), cls: 'k-misc', desc: ck.title || ck.name || '' };
-      return { main: 'USER' + String(d.index).padStart(2, '0'), cls: 'k-misc', desc: `Eigener Keycode ${d.index}` };
+      return { main: 'USER' + String(d.index).padStart(2, '0'), cls: 'k-misc', desc: `Custom keycode ${d.index}` };
     }
     case 'quantum': {
       const q = QUANTUM[d.code];
       if (q) return { main: q[0], cls: 'k-misc', desc: q[1] };
       return { main: 'QK', sub: d.code.toString(16), cls: 'k-misc', desc: 'Quantum 0x' + d.code.toString(16) };
     }
-    case 'lighting': return { main: RGB_MATRIX[d.code] || 'RGB', cls: 'k-misc', desc: 'Beleuchtung' };
+    case 'lighting': return { main: RGB_MATRIX[d.code] || 'RGB', cls: 'k-misc', desc: 'Lighting' };
     case 'swap': return { main: 'SH', cls: 'k-misc', desc: 'Swap Hands' };
-    case 'magic': return { main: 'Magic', cls: 'k-misc', desc: 'Magic-Keycode' };
+    case 'magic': return { main: 'Magic', cls: 'k-misc', desc: 'Magic keycode' };
     case 'midi': return { main: 'MIDI', cls: 'k-misc', desc: 'MIDI' };
     case 'unicode': return { main: 'U+', cls: 'k-misc', desc: 'Unicode' };
     default: return { main: '0x' + kc.toString(16).toUpperCase(), cls: 'k-misc', desc: 'Keycode 0x' + kc.toString(16) };
@@ -2109,7 +2109,7 @@ class KeyboardView {
     const pad = 6;
     const svg = el('svg', {
       viewBox: `${-pad} ${-pad} ${width * U + pad * 2} ${height * U + pad * 2}`,
-      class: 'kbd-svg', role: 'img', 'aria-label': 'Tastatur',
+      class: 'kbd-svg', role: 'img', 'aria-label': 'Keyboard',
     });
     this.svg = svg;
     for (const key of keys) {
@@ -2773,33 +2773,33 @@ class HalcyonMonkeytype {
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
     if (this.viaPrompt) m.append(this.#viaPromptUi());
     const actions = row();
-    if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
-    else if (this.source !== 'hid') actions.append(btn('Tastatur verbinden', () => this.connectClicked(), true));
-    if (this.source === 'hid' && !this.vial?.unlocked) actions.append(btn('Entsperren', () => this.runUnlock(), true));
-    if (this.source === 'hid' && this.vial?.unlocked) actions.append(btn('Sperren', () => this.lock()));
-    if (this.source === 'hid') actions.append(btn('Andere Tastatur', () => this.connectClicked()));
-    if (this.source !== 'hid' && DEMO_DATA) actions.append(btn(this.source === 'demo' ? 'Demo schließen' : 'Demo', () => (this.source === 'demo' ? this.closeKeyboard() : this.loadDemo())));
+    if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'No WebHID – use Chrome or Edge'));
+    else if (this.source !== 'hid') actions.append(btn('Connect keyboard', () => this.connectClicked(), true));
+    if (this.source === 'hid' && !this.vial?.unlocked) actions.append(btn('Unlock', () => this.runUnlock(), true));
+    if (this.source === 'hid' && this.vial?.unlocked) actions.append(btn('Lock', () => this.lock()));
+    if (this.source === 'hid') actions.append(btn('Other keyboard', () => this.connectClicked()));
+    if (this.source !== 'hid' && DEMO_DATA) actions.append(btn(this.source === 'demo' ? 'Close demo' : 'Demo', () => (this.source === 'demo' ? this.closeKeyboard() : this.loadDemo())));
     m.append(actions);
 
     const host = h('select', { onchange: (e) => { this.prefs.hostLayout = e.target.value; this.#savePrefs(); this.applyHostLayout(); } },
-      ...[['auto', 'Automatisch'], ['de-mac', 'Deutsch (Mac)'], ['de-win', 'Deutsch (Windows/Linux)'], ['us', 'US'], ['eurkey', 'EurKEY (US + Umlaute)']].map(([v, t]) =>
+      ...[['auto', 'Automatic'], ['us', 'US'], ['eurkey', 'EurKEY (US + umlauts)'], ['de-win', 'German (Windows/Linux)'], ['de-mac', 'German (Mac)']].map(([v, t]) =>
         h('option', { value: v, ...(this.prefs.hostLayout === v ? { selected: true } : {}) }, t)));
-    m.append(row(h('span', {}, 'Systemlayout'), host));
+    m.append(row(h('span', {}, 'System layout'), host));
     if (this.kb) {
       const base = h('select', { onchange: (e) => this.setBaseLayer(+e.target.value) },
         ...this.kb.usedLayers.map((u, i) => (u ? h('option', { value: i, ...(i === this.model.defaultLayer ? { selected: true } : {}) }, `Layer ${i}`) : null)).filter(Boolean));
-      m.append(row(h('span', {}, 'Basis-Layer'), base));
+      m.append(row(h('span', {}, 'Base layer'), base));
     }
-    m.append(check('hints', 'Nächste Taste markieren'), check('hands', 'Hände anzeigen'), check('bar', 'Layer- und Modifier-Leiste'),
-      check('modules', 'Encoder & Module zeigen'), check('hideMtKeymap', 'monkeytype-Keymap ausblenden'));
+    m.append(check('hints', 'Highlight next key'), check('hands', 'Show hands'), check('bar', 'Layer and modifier bar'),
+      check('modules', 'Show encoders & modules'), check('hideMtKeymap', 'Hide monkeytype keymap'));
     const learned = this.kb ? Object.keys(this.kb.preferred).length : 0;
     if (learned) {
-      m.append(row(h('span', { class: 'hmt-muted', title: 'Zeichen, die auf mehreren Tasten liegen: gezeigt wird der Weg, den du zuletzt benutzt hast.' },
-        `${learned} bevorzugte Tasten gemerkt`), btn('Vergessen', () => this.#forgetPreferred())));
+      m.append(row(h('span', { class: 'hmt-muted', title: 'Characters you can type with more than one key: the hint shows the key you used last.' },
+        `${learned} preferred keys remembered`), btn('Forget', () => this.#forgetPreferred())));
     }
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
-    m.append(row(h('span', {}, 'Größe'), size));
+    m.append(row(h('span', {}, 'Size'), size));
   }
 
   /** VIA keyboards carry no layout: ask for their VIA definition JSON once, then keep it per keyboard. */
@@ -2821,26 +2821,26 @@ class HalcyonMonkeytype {
       this.#renderMenu();
     } });
     return h('div', { class: 'hmt-menu-status' },
-      h('div', {}, `${device.productName || 'Diese Tastatur'} hat VIA statt Vial. Lade einmal ihre VIA-Definition (JSON), `
-        + 'z. B. aus github.com/the-via/keyboards oder aus VIA (Einstellungen → Design).'),
+      h('div', {}, `${device.productName || 'This keyboard'} runs VIA, not Vial. Load its VIA definition (JSON) once, `
+        + 'e.g. from github.com/the-via/keyboards.'),
       error ? h('div', { style: 'color: var(--error-color, #ca4754)' }, error) : null,
       h('div', { class: 'hmt-menu-row' }, file,
-        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Layout-Datei laden'),
-        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Abbrechen')));
+        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Load layout file'),
+        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Cancel')));
   }
 
   #statusText() {
-    if (this.source === 'none') return 'Keine Tastatur verbunden';
+    if (this.source === 'none') return 'No keyboard connected';
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
-    if (this.source === 'cache') return 'Keymap aus dem Speicher (zuletzt gelesen). Für Live-Anzeige und aktuelle Layer die Tastatur verbinden.';
-    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
-    if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
-    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken). '
-      + 'Ein Layer erscheint, sobald eine Taste darauf tippt. ' + keymap;
+    if (this.source === 'cache') return 'Keymap from storage (last read). Connect the keyboard for the live view and current layers.';
+    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} layers) read from the keyboard – no unlock needed for that.`;
+    if (this.matrix) return 'Live – every key, layer and modifier. ' + keymap;
+    return 'Locked – layer keys only show after unlocking (lasts until you unplug). '
+      + 'Until then a layer shows as soon as a key on it types. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.source === 'cache' ? 'gespeichert' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.source === 'cache' ? 'stored' : this.matrix ? 'live' : 'locked';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -2852,27 +2852,27 @@ class HalcyonMonkeytype {
     n.innerHTML = '';
     if (this.unlocking) {
       const names = this.vial.unlockKeys.map(([r, c]) => this.#keyLabelAt(r, c)).join(' + ');
-      n.append(h('div', {}, `Halte ${names} gedrückt, bis der Balken voll ist (ca. 6 s). monkeytype bekommt solange keine Eingaben.`),
+      n.append(h('div', {}, `Hold ${names} until the bar is full (about 6 s). monkeytype gets no input meanwhile.`),
         h('div', { class: 'hmt-progress' }, h('div', { style: `width:${progress || 0}%` })),
-        h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
+        h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Cancel'));
       return;
     }
     if (this.source === 'cache') {
-      n.append(h('span', {}, 'Deine Keymap aus dem Speicher. Verbinde die Tastatur für die Live-Anzeige.'),
-        h('button', { class: 'hmt-btn primary', onclick: () => this.connectClicked() }, 'Verbinden'));
+      n.append(h('span', {}, 'Your keymap from storage. Connect the keyboard for the live view.'),
+        h('button', { class: 'hmt-btn primary', onclick: () => this.connectClicked() }, 'Connect'));
       return;
     }
     if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
-      n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
-        h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
-        h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
+      n.append(h('span', {}, 'Locked, layer keys stay hidden until a key on the layer types. One unlock lasts until you unplug.'),
+        h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Unlock'),
+        h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Later'));
     }
   }
 
   #keyLabelAt(r, c) {
     const node = [...this.view.nodes.values()].find((n) => n.key.row === r && n.key.col === c);
     const label = (node?.label?.main || '').trim();
-    return label ? `„${label}“` : `Taste ${r},${c}`;
+    return label ? `"${label}"` : `key ${r},${c}`;
   }
 
   // ---------------------------------------------------------------- placement in monkeytype
@@ -2968,10 +2968,10 @@ class HalcyonMonkeytype {
     try {
       const transport = new HidTransport(device);
       await transport.open();
-      const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
-      this.statusEl.textContent = 'lädt …';
+      const vial = new VialKeyboard(transport, device.productName || 'Keyboard');
+      this.statusEl.textContent = 'loading …';
       await vial.load((f, what) => {
-        this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
+        this.statusEl.textContent = what?.startsWith('Finishing unlock') ? what : `loading ${Math.round(f * 100)} %`;
       }, { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       store.set('lastDevice', deviceId(device));
@@ -2987,13 +2987,13 @@ class HalcyonMonkeytype {
       try { await device.close(); } catch { /* ignore */ }
       if (err.code === 'needsDefinition') {
         this.viaPrompt = { device };
-        this.statusEl.textContent = 'Layout fehlt';
+        this.statusEl.textContent = 'layout needed';
         this.menuEl.hidden = false;
         this.#renderMenu();
         return;
       }
       console.error('[halcyon]', err);
-      this.statusEl.textContent = 'Fehler';
+      this.statusEl.textContent = 'error';
       this.pill.title = err.message;
     }
   }
@@ -3162,7 +3162,7 @@ class HalcyonMonkeytype {
       this.kb.usedLayers.forEach((used, i) => {
         if (!used) return;
         this.layersEl.append(h('button', {
-          class: 'hmt-layer', 'data-layer': i, title: 'Klick: Layer festhalten',
+          class: 'hmt-layer', 'data-layer': i, title: 'Click: pin this layer',
           onclick: () => { this.previewLayer = this.previewLayer === i ? null : i; this.render(); },
         }, String(i)));
       });
@@ -3217,17 +3217,17 @@ class HalcyonMonkeytype {
     if (!path) {
       this.view.setHint(null);
       this.hands.set(null);
-      this.hintEl.textContent = ch !== null && ch !== undefined ? `„${ch}“ ist nicht in deiner Keymap` : '';
+      this.hintEl.textContent = ch !== null && ch !== undefined ? `"${ch}" is not in your keymap` : '';
       return;
     }
     this.view.setHint({ target: path.target, layerKeys: path.layerKeys, modKeys: path.modKeys });
     const f = (pos) => this.kb.fingers.get(pos);
     this.hands.set({ target: f(path.target), layer: path.layerKeys.map(f), mod: path.modKeys.map(f) });
     const steps = [];
-    if (path.layer !== this.model.defaultLayer) steps.push(`Layer ${path.layer} halten`);
+    if (path.layer !== this.model.defaultLayer) steps.push(`hold layer ${path.layer}`);
     if (path.shift) steps.push(MOD_SYMBOLS.shift);
     if (path.alt) steps.push(MOD_SYMBOLS.alt);
-    this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + Taste' : '';
+    this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + key' : '';
   }
 
   // ---------------------------------------------------------------- preferred keys

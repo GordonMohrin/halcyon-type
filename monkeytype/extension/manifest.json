@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Split Keyboard for monkeytype",
-  "version": "0.2.0",
-  "description": "Shows your Vial keyboard live in monkeytype: layers, modifiers, next key and fingers.",
+  "version": "0.3.0",
+  "description": "Shows your Vial or VIA keyboard live in monkeytype: your keymap, layers, the next key and the finger to use.",
   "homepage_url": "https://github.com/GordonMohrin/halcyon-type",
   "icons": {
     "16": "icons/icon-16.png",

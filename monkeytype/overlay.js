@@ -138,33 +138,33 @@ class HalcyonMonkeytype {
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
     if (this.viaPrompt) m.append(this.#viaPromptUi());
     const actions = row();
-    if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
-    else if (this.source !== 'hid') actions.append(btn('Tastatur verbinden', () => this.connectClicked(), true));
-    if (this.source === 'hid' && !this.vial?.unlocked) actions.append(btn('Entsperren', () => this.runUnlock(), true));
-    if (this.source === 'hid' && this.vial?.unlocked) actions.append(btn('Sperren', () => this.lock()));
-    if (this.source === 'hid') actions.append(btn('Andere Tastatur', () => this.connectClicked()));
-    if (this.source !== 'hid' && DEMO_DATA) actions.append(btn(this.source === 'demo' ? 'Demo schließen' : 'Demo', () => (this.source === 'demo' ? this.closeKeyboard() : this.loadDemo())));
+    if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'No WebHID – use Chrome or Edge'));
+    else if (this.source !== 'hid') actions.append(btn('Connect keyboard', () => this.connectClicked(), true));
+    if (this.source === 'hid' && !this.vial?.unlocked) actions.append(btn('Unlock', () => this.runUnlock(), true));
+    if (this.source === 'hid' && this.vial?.unlocked) actions.append(btn('Lock', () => this.lock()));
+    if (this.source === 'hid') actions.append(btn('Other keyboard', () => this.connectClicked()));
+    if (this.source !== 'hid' && DEMO_DATA) actions.append(btn(this.source === 'demo' ? 'Close demo' : 'Demo', () => (this.source === 'demo' ? this.closeKeyboard() : this.loadDemo())));
     m.append(actions);
 
     const host = h('select', { onchange: (e) => { this.prefs.hostLayout = e.target.value; this.#savePrefs(); this.applyHostLayout(); } },
-      ...[['auto', 'Automatisch'], ['de-mac', 'Deutsch (Mac)'], ['de-win', 'Deutsch (Windows/Linux)'], ['us', 'US'], ['eurkey', 'EurKEY (US + Umlaute)']].map(([v, t]) =>
+      ...[['auto', 'Automatic'], ['us', 'US'], ['eurkey', 'EurKEY (US + umlauts)'], ['de-win', 'German (Windows/Linux)'], ['de-mac', 'German (Mac)']].map(([v, t]) =>
         h('option', { value: v, ...(this.prefs.hostLayout === v ? { selected: true } : {}) }, t)));
-    m.append(row(h('span', {}, 'Systemlayout'), host));
+    m.append(row(h('span', {}, 'System layout'), host));
     if (this.kb) {
       const base = h('select', { onchange: (e) => this.setBaseLayer(+e.target.value) },
         ...this.kb.usedLayers.map((u, i) => (u ? h('option', { value: i, ...(i === this.model.defaultLayer ? { selected: true } : {}) }, `Layer ${i}`) : null)).filter(Boolean));
-      m.append(row(h('span', {}, 'Basis-Layer'), base));
+      m.append(row(h('span', {}, 'Base layer'), base));
     }
-    m.append(check('hints', 'Nächste Taste markieren'), check('hands', 'Hände anzeigen'), check('bar', 'Layer- und Modifier-Leiste'),
-      check('modules', 'Encoder & Module zeigen'), check('hideMtKeymap', 'monkeytype-Keymap ausblenden'));
+    m.append(check('hints', 'Highlight next key'), check('hands', 'Show hands'), check('bar', 'Layer and modifier bar'),
+      check('modules', 'Show encoders & modules'), check('hideMtKeymap', 'Hide monkeytype keymap'));
     const learned = this.kb ? Object.keys(this.kb.preferred).length : 0;
     if (learned) {
-      m.append(row(h('span', { class: 'hmt-muted', title: 'Zeichen, die auf mehreren Tasten liegen: gezeigt wird der Weg, den du zuletzt benutzt hast.' },
-        `${learned} bevorzugte Tasten gemerkt`), btn('Vergessen', () => this.#forgetPreferred())));
+      m.append(row(h('span', { class: 'hmt-muted', title: 'Characters you can type with more than one key: the hint shows the key you used last.' },
+        `${learned} preferred keys remembered`), btn('Forget', () => this.#forgetPreferred())));
     }
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
-    m.append(row(h('span', {}, 'Größe'), size));
+    m.append(row(h('span', {}, 'Size'), size));
   }
 
   /** VIA keyboards carry no layout: ask for their VIA definition JSON once, then keep it per keyboard. */
@@ -186,26 +186,26 @@ class HalcyonMonkeytype {
       this.#renderMenu();
     } });
     return h('div', { class: 'hmt-menu-status' },
-      h('div', {}, `${device.productName || 'Diese Tastatur'} hat VIA statt Vial. Lade einmal ihre VIA-Definition (JSON), `
-        + 'z. B. aus github.com/the-via/keyboards oder aus VIA (Einstellungen → Design).'),
+      h('div', {}, `${device.productName || 'This keyboard'} runs VIA, not Vial. Load its VIA definition (JSON) once, `
+        + 'e.g. from github.com/the-via/keyboards.'),
       error ? h('div', { style: 'color: var(--error-color, #ca4754)' }, error) : null,
       h('div', { class: 'hmt-menu-row' }, file,
-        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Layout-Datei laden'),
-        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Abbrechen')));
+        h('button', { class: 'hmt-btn primary', onclick: (e) => { e.stopPropagation(); file.click(); } }, 'Load layout file'),
+        h('button', { class: 'hmt-btn', onclick: (e) => { e.stopPropagation(); this.viaPrompt = null; this.#renderMenu(); } }, 'Cancel')));
   }
 
   #statusText() {
-    if (this.source === 'none') return 'Keine Tastatur verbunden';
+    if (this.source === 'none') return 'No keyboard connected';
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
-    if (this.source === 'cache') return 'Keymap aus dem Speicher (zuletzt gelesen). Für Live-Anzeige und aktuelle Layer die Tastatur verbinden.';
-    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
-    if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
-    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken). '
-      + 'Ein Layer erscheint, sobald eine Taste darauf tippt. ' + keymap;
+    if (this.source === 'cache') return 'Keymap from storage (last read). Connect the keyboard for the live view and current layers.';
+    const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} layers) read from the keyboard – no unlock needed for that.`;
+    if (this.matrix) return 'Live – every key, layer and modifier. ' + keymap;
+    return 'Locked – layer keys only show after unlocking (lasts until you unplug). '
+      + 'Until then a layer shows as soon as a key on it types. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.source === 'cache' ? 'gespeichert' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.source === 'cache' ? 'stored' : this.matrix ? 'live' : 'locked';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -217,27 +217,27 @@ class HalcyonMonkeytype {
     n.innerHTML = '';
     if (this.unlocking) {
       const names = this.vial.unlockKeys.map(([r, c]) => this.#keyLabelAt(r, c)).join(' + ');
-      n.append(h('div', {}, `Halte ${names} gedrückt, bis der Balken voll ist (ca. 6 s). monkeytype bekommt solange keine Eingaben.`),
+      n.append(h('div', {}, `Hold ${names} until the bar is full (about 6 s). monkeytype gets no input meanwhile.`),
         h('div', { class: 'hmt-progress' }, h('div', { style: `width:${progress || 0}%` })),
-        h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
+        h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Cancel'));
       return;
     }
     if (this.source === 'cache') {
-      n.append(h('span', {}, 'Deine Keymap aus dem Speicher. Verbinde die Tastatur für die Live-Anzeige.'),
-        h('button', { class: 'hmt-btn primary', onclick: () => this.connectClicked() }, 'Verbinden'));
+      n.append(h('span', {}, 'Your keymap from storage. Connect the keyboard for the live view.'),
+        h('button', { class: 'hmt-btn primary', onclick: () => this.connectClicked() }, 'Connect'));
       return;
     }
     if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
-      n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
-        h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
-        h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
+      n.append(h('span', {}, 'Locked, layer keys stay hidden until a key on the layer types. One unlock lasts until you unplug.'),
+        h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Unlock'),
+        h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Later'));
     }
   }
 
   #keyLabelAt(r, c) {
     const node = [...this.view.nodes.values()].find((n) => n.key.row === r && n.key.col === c);
     const label = (node?.label?.main || '').trim();
-    return label ? `„${label}“` : `Taste ${r},${c}`;
+    return label ? `"${label}"` : `key ${r},${c}`;
   }
 
   // ---------------------------------------------------------------- placement in monkeytype
@@ -333,10 +333,10 @@ class HalcyonMonkeytype {
     try {
       const transport = new HidTransport(device);
       await transport.open();
-      const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
-      this.statusEl.textContent = 'lädt …';
+      const vial = new VialKeyboard(transport, device.productName || 'Keyboard');
+      this.statusEl.textContent = 'loading …';
       await vial.load((f, what) => {
-        this.statusEl.textContent = what?.startsWith('Entsperren') ? what : `lädt ${Math.round(f * 100)} %`;
+        this.statusEl.textContent = what?.startsWith('Finishing unlock') ? what : `loading ${Math.round(f * 100)} %`;
       }, { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       store.set('lastDevice', deviceId(device));
@@ -352,13 +352,13 @@ class HalcyonMonkeytype {
       try { await device.close(); } catch { /* ignore */ }
       if (err.code === 'needsDefinition') {
         this.viaPrompt = { device };
-        this.statusEl.textContent = 'Layout fehlt';
+        this.statusEl.textContent = 'layout needed';
         this.menuEl.hidden = false;
         this.#renderMenu();
         return;
       }
       console.error('[halcyon]', err);
-      this.statusEl.textContent = 'Fehler';
+      this.statusEl.textContent = 'error';
       this.pill.title = err.message;
     }
   }
@@ -527,7 +527,7 @@ class HalcyonMonkeytype {
       this.kb.usedLayers.forEach((used, i) => {
         if (!used) return;
         this.layersEl.append(h('button', {
-          class: 'hmt-layer', 'data-layer': i, title: 'Klick: Layer festhalten',
+          class: 'hmt-layer', 'data-layer': i, title: 'Click: pin this layer',
           onclick: () => { this.previewLayer = this.previewLayer === i ? null : i; this.render(); },
         }, String(i)));
       });
@@ -582,17 +582,17 @@ class HalcyonMonkeytype {
     if (!path) {
       this.view.setHint(null);
       this.hands.set(null);
-      this.hintEl.textContent = ch !== null && ch !== undefined ? `„${ch}“ ist nicht in deiner Keymap` : '';
+      this.hintEl.textContent = ch !== null && ch !== undefined ? `"${ch}" is not in your keymap` : '';
       return;
     }
     this.view.setHint({ target: path.target, layerKeys: path.layerKeys, modKeys: path.modKeys });
     const f = (pos) => this.kb.fingers.get(pos);
     this.hands.set({ target: f(path.target), layer: path.layerKeys.map(f), mod: path.modKeys.map(f) });
     const steps = [];
-    if (path.layer !== this.model.defaultLayer) steps.push(`Layer ${path.layer} halten`);
+    if (path.layer !== this.model.defaultLayer) steps.push(`hold layer ${path.layer}`);
     if (path.shift) steps.push(MOD_SYMBOLS.shift);
     if (path.alt) steps.push(MOD_SYMBOLS.alt);
-    this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + Taste' : '';
+    this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + key' : '';
   }
 
   // ---------------------------------------------------------------- preferred keys

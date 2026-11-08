@@ -86,15 +86,15 @@ function kbName() {
 
 function updateStatus() {
   if (app.source === 'none') {
-    setStatus('Keine Tastatur verbunden', 'off');
+    setStatus('No keyboard connected', 'off');
   } else if (app.source === 'demo') {
     setStatus('Demo · ' + kbName(), 'demo');
   } else if (app.source === 'cache') {
-    setStatus(kbName() + ' · aus dem Speicher – für die Live-Anzeige verbinden', 'off');
+    setStatus(kbName() + ' · from storage – connect for the live view', 'off');
   } else if (app.matrix) {
     setStatus(kbName() + ' · live', 'live');
   } else {
-    setStatus(kbName() + ' · gesperrt (nur Fokus-Modus)', 'locked');
+    setStatus(kbName() + ' · locked (focused window only)', 'locked');
   }
   show($('#btn-connect'), app.source !== 'hid');
   show($('#unlock-banner'), app.source === 'hid' && !app.matrix && !app.vial?.unlocked && !store.get('unlockDismissed', false));
@@ -149,7 +149,7 @@ function rebuildIndex() {
 async function applyHostLayout() {
   const id = app.hostId === 'auto' ? await detectHostLayout() : app.hostId;
   app.host = HOST_LAYOUTS[id] || HOST_LAYOUTS.us;
-  $('#host-detected').textContent = app.hostId === 'auto' ? `(erkannt: ${app.host.name})` : '';
+  $('#host-detected').textContent = app.hostId === 'auto' ? `(detected: ${app.host.name})` : '';
   if (app.kb) {
     rebuildIndex();
     view.setLayer(view.layer, view.mask, view.live, true);
@@ -162,13 +162,13 @@ async function applyHostLayout() {
 async function connect(device) {
   if (app.device === device && app.source === 'hid') return;
   await disconnect(null, false);
-  setStatus('Verbinde …', 'busy');
+  setStatus('Connecting …', 'busy');
   channel?.postMessage({ type: 'claim', from: tabId });
   try {
     const transport = new HidTransport(device);
     await transport.open();
-    const vial = new VialKeyboard(transport, device.productName || 'Tastatur');
-    await vial.load((f, what) => setStatus(`Lese ${what} … ${Math.round(f * 100)} %`, 'busy'),
+    const vial = new VialKeyboard(transport, device.productName || 'Keyboard');
+    await vial.load((f, what) => setStatus(what?.startsWith('Finishing unlock') ? what : `Reading ${what} … ${Math.round(f * 100)}%`, 'busy'),
       { viaDefinition: store.get('viaDef.' + deviceId(device), null) });
     app.device = device;
     app.transport = transport;
@@ -190,7 +190,7 @@ async function connect(device) {
       return;
     }
     console.error(err);
-    setStatus('Fehler: ' + err.message, 'error');
+    setStatus('Error: ' + err.message, 'error');
   }
 }
 
@@ -199,10 +199,10 @@ let viaDevice = null;
 
 function askViaDefinition(device, error = '') {
   viaDevice = device;
-  $('#via-text').textContent = `${device.productName || 'Diese Tastatur'} hat VIA statt Vial.`;
+  $('#via-text').textContent = `${device.productName || 'This keyboard'} uses VIA instead of Vial.`;
   $('#via-error').textContent = error;
   $('#via-banner').hidden = false;
-  setStatus('Layout-Datei nötig', 'off');
+  setStatus('Layout file needed', 'off');
 }
 
 async function onViaFile(file) {
@@ -248,14 +248,14 @@ async function disconnect(reason, showStored = true) {
 
 async function connectClicked() {
   if (!('hid' in navigator)) {
-    alert('Dein Browser unterstützt kein WebHID. Bitte Chrome, Edge, Brave oder Arc verwenden.');
+    alert('Your browser does not support WebHID. Please use Chrome, Edge, Brave or Arc.');
     return;
   }
   try {
     const device = await requestDevice();
     if (device) await connect(device);
   } catch (err) {
-    if (err.name !== 'NotFoundError') setStatus('Fehler: ' + err.message, 'error');
+    if (err.name !== 'NotFoundError') setStatus('Error: ' + err.message, 'error');
   }
 }
 
@@ -308,7 +308,7 @@ function pollLoop(step) {
         if (++failures > 8) {
           console.error(err);
           stopPolling();
-          setStatus('Verbindung zur Tastatur verloren', 'error');
+          setStatus('Lost connection to the keyboard', 'error');
           return;
         }
       }
@@ -338,7 +338,9 @@ async function runUnlock() {
   stopPolling(); // the firmware answers nothing else while unlocking
   view.setUnlockKeys(vial.unlockKeys);
   const names = vial.unlockKeys.map(([r, c]) => keyNameAt(r, c)).join(' + ');
-  text.textContent = `Halte ${vial.unlockKeys.length > 1 ? 'gleichzeitig' : ''} ${names} gedrückt, bis der Balken voll ist (etwa 6 Sekunden). Die Tasten sind auf der Tastatur unten markiert.`;
+  text.textContent = `Vial only reveals which keys are pressed after an unlock, as protection against keyloggers: otherwise any program with HID access could read every keystroke. `
+    + `Hold ${names}${vial.unlockKeys.length > 1 ? ' together' : ''} until the bar is full (about 6 seconds). The keys are highlighted on the keyboard below. `
+    + 'The unlock lasts until you unplug the keyboard.';
   bar.style.width = '0%';
   dlg.hidden = false;
   const token = {};
@@ -357,7 +359,7 @@ async function runUnlock() {
       }
     }
   } catch (err) {
-    setStatus('Entsperren fehlgeschlagen: ' + err.message, 'error');
+    setStatus('Unlock failed: ' + err.message, 'error');
   }
   unlockAbort = null;
   dlg.hidden = true;
@@ -370,7 +372,7 @@ function keyNameAt(r, c) {
   const kc = app.kb?.keymap[app.model.defaultLayer]?.[r]?.[c];
   const node = [...view.nodes.values()].find((n) => n.key.row === r && n.key.col === c);
   const label = node?.label?.main || '';
-  return label ? `„${label.trim() || '␣'}“` : `Taste ${r},${c}` + (kc === undefined ? '' : '');
+  return label ? `"${label.trim() || '␣'}"` : `key ${r},${c}` + (kc === undefined ? '' : '');
 }
 
 // ------------------------------------------------------------------ rendering of live state
@@ -438,7 +440,7 @@ function renderLayerChips(rebuild, mask = 1, shown = 0, base = 0, oneShot = -1) 
       chip.className = 'layer-chip';
       chip.dataset.layer = i;
       chip.innerHTML = `<span class="num">${i}</span><span class="lname">${escapeHtml(layerName(i))}</span>`;
-      chip.title = 'Klick: Layer anzeigen/festhalten · Doppelklick: umbenennen';
+      chip.title = 'Click: show/pin layer · Double-click: rename';
       chip.addEventListener('click', () => {
         app.previewLayer = app.previewLayer === i ? null : i;
         render();
@@ -480,7 +482,7 @@ function escapeHtml(s) {
 // ------------------------------------------------------------------ hints & heatmap
 
 function charName(ch) {
-  return ch === ' ' ? 'Leertaste' : ch === '\b' ? 'Rücktaste' : `„${ch}“`;
+  return ch === ' ' ? 'Space' : ch === '\b' ? 'Backspace' : `"${ch}"`;
 }
 
 function updateHint(ch) {
@@ -494,7 +496,7 @@ function updateHint(ch) {
   const path = app.index.pathFor(ch);
   if (!path) {
     view.setHint(null);
-    out.innerHTML = `${escapeHtml(charName(ch))} <span class="muted">— nicht in deiner Keymap gefunden</span>`;
+    out.innerHTML = `${escapeHtml(charName(ch))} <span class="muted">— not found in your keymap</span>`;
     return;
   }
   view.setHint({
@@ -502,10 +504,10 @@ function updateHint(ch) {
     badge: ch === ' ' ? '␣' : ch === '\b' ? '⌫' : ch,
   });
   const steps = [];
-  if (path.layer !== app.model.defaultLayer) steps.push(`<b>${escapeHtml(layerName(path.layer))}</b> halten`);
+  if (path.layer !== app.model.defaultLayer) steps.push(`hold <b>${escapeHtml(layerName(path.layer))}</b>`);
   if (path.shift) steps.push(`<b>${MOD_SYMBOLS.shift}</b>`);
   if (path.alt) steps.push(`<b>${MOD_SYMBOLS.alt}</b>`);
-  out.innerHTML = `Nächstes Zeichen ${escapeHtml(charName(ch))}${steps.length ? ': ' + steps.join(' + ') + ' + Taste' : ''}`;
+  out.innerHTML = `Next character ${escapeHtml(charName(ch))}${steps.length ? ': ' + steps.join(' + ') + ' + key' : ''}`;
 }
 
 function showHeat(result) {
@@ -556,7 +558,7 @@ const test = VIEW_ONLY ? null : new TypingTest(
 );
 
 function loadTestConfig() {
-  return { mode: 'time', time: 30, words: 25, lang: 'de', punctuation: false, numbers: false, code: false, ...store.get('test', {}) };
+  return { mode: 'time', time: 30, words: 25, lang: 'en', punctuation: false, numbers: false, code: false, ...store.get('test', {}) };
 }
 
 function syncConfigBar(cfg) {
@@ -606,8 +608,8 @@ function showResult(r) {
   drawChart($('#r-chart'), r.samples);
   const worst = [...r.errorsByChar].sort((a, b) => b[1] - a[1]).slice(0, 6);
   $('#r-worst').innerHTML = worst.length
-    ? 'Häufigste Fehler: ' + worst.map(([ch, n]) => `<span class="kbdch">${escapeHtml(ch === ' ' ? '␣' : ch)}</span>×${n}`).join(' ')
-    : 'Keine Fehler – sauber!';
+    ? 'Most frequent errors: ' + worst.map(([ch, n]) => `<span class="kbdch">${escapeHtml(ch === ' ' ? '␣' : ch)}</span>×${n}`).join(' ')
+    : 'No errors – clean run!';
   res.hidden = false;
   $('#test').hidden = true;
   showHeat(r);
@@ -620,8 +622,8 @@ function hideResult() {
 }
 
 function describeConfig(c) {
-  const parts = [c.mode === 'time' ? `Zeit ${c.time}s` : `${c.words} Wörter`, c.lang === 'de' ? 'Deutsch' : 'English'];
-  if (c.code) parts.push('Code'); else { if (c.punctuation) parts.push('Satzzeichen'); if (c.numbers) parts.push('Zahlen'); }
+  const parts = [c.mode === 'time' ? `time ${c.time}s` : `${c.words} words`, c.lang === 'de' ? 'Deutsch' : 'English'];
+  if (c.code) parts.push('code'); else { if (c.punctuation) parts.push('punctuation'); if (c.numbers) parts.push('numbers'); }
   return parts.join(' · ');
 }
 
@@ -661,11 +663,11 @@ async function openFloating() {
         pip.document.head.appendChild(link);
       }
     }
-    pip.document.title = 'Halcyon Type – Tastatur';
+    pip.document.title = 'Split Keyboard – keyboard';
     pip.document.body.className = 'pip';
     const placeholder = document.createElement('div');
     placeholder.id = 'kbd-placeholder';
-    placeholder.innerHTML = '<p>Die Tastatur ist im schwebenden Fenster. <button class="link" id="btn-unfloat">Zurückholen</button></p>';
+    placeholder.innerHTML = '<p>The keyboard is in the floating window. <button class="link" id="btn-unfloat">Bring it back</button></p>';
     panel.replaceWith(placeholder);
     pip.document.body.appendChild(panel);
     document.body.classList.add('floating');
@@ -684,7 +686,7 @@ async function openFloating() {
 function bindEvents() {
   $('#btn-connect').addEventListener('click', connectClicked);
   $('#btn-demo').addEventListener('click', loadDemo);
-  $('#btn-float').addEventListener('click', () => openFloating().catch((e) => setStatus('Fenster: ' + e.message, 'error')));
+  $('#btn-float').addEventListener('click', () => openFloating().catch((e) => setStatus('Floating window: ' + e.message, 'error')));
   $('#btn-unlock').addEventListener('click', runUnlock);
   $('#btn-via-file').addEventListener('click', () => $('#via-file').click());
   $('#via-file').addEventListener('change', (e) => onViaFile(e.target.files[0]));
@@ -743,11 +745,11 @@ function bindEvents() {
 
   if ('hid' in navigator) {
     navigator.hid.addEventListener('connect', (e) => { if (app.source !== 'hid' && isRawHid(e.device)) connect(e.device); });
-    navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.device) disconnect('Tastatur getrennt'); });
+    navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.device) disconnect('Keyboard disconnected'); });
   }
   channel?.addEventListener('message', (e) => {
     if (e.data?.type === 'claim' && e.data.from !== tabId && app.source === 'hid') {
-      disconnect('Tastatur wird in einem anderen Fenster verwendet');
+      disconnect('Keyboard is in use in another window');
     }
   });
   window.addEventListener('pagehide', () => { stopPolling(); });
@@ -768,7 +770,7 @@ async function boot() {
   if (!VIEW_ONLY) setupConfigBar();
   updateStatus();
   if (!('hid' in navigator)) {
-    setStatus('Kein WebHID in diesem Browser – nutze Chrome/Edge, oder probiere die Demo', 'error');
+    setStatus('No WebHID in this browser – use Chrome/Edge, or try the demo', 'error');
     $('#btn-connect').disabled = true;
     return;
   }

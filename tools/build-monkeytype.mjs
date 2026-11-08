@@ -11,7 +11,7 @@ import { deflateRawSync } from 'node:zlib';
 import { crc32 } from './make-icons.mjs';
 
 const NAME = 'Split Keyboard for monkeytype';
-const DESCRIPTION = 'Shows your Vial keyboard live in monkeytype: layers, modifiers, next key and fingers.';
+const DESCRIPTION = 'Shows your Vial or VIA keyboard live in monkeytype: your keymap, layers, the next key and the finger to use.';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(readFileSync(resolve(root, 'monkeytype/version.json'), 'utf8')).version;

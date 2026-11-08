@@ -1,160 +1,144 @@
 # Split Keyboard for monkeytype
 
-Live-Anzeige deiner Vial-Tastatur für **monkeytype.com**. Funktioniert mit jeder Tastatur mit Vial-Firmware,
-ohne etwas an der Firmware zu ändern; entstanden für die splitkb **Halcyon**-Reihe (Kyria, Corne, Lily58, Elora, Ferris, Sofle).
+See your own keyboard live while you type on **monkeytype.com**: your real keymap with all layers, every key you
+press, the next key to hit and the finger to use. Works with any keyboard running **Vial** (and VIA, see below),
+without changing its firmware. Built for split keyboards such as the splitkb Halcyon series (Kyria, Corne,
+Lily58, Elora, Ferris, Sofle).
 
-Du tippst ganz normal im echten monkeytype mit deinem Account, Ergebnisse und Bestleistungen landen wie immer dort.
-Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modifiern, direkt aus der Firmware gelesen:
+You type in the real monkeytype with your own account; results and personal bests are saved there as usual.
+Below the words you get:
 
-- jede gedrückte Taste live, auch Layer-, Mod-Tap- und One-Shot-Tasten
-- der aktive Layer schaltet die Beschriftung um; bei gehaltenem Shift oder Option zeigen die Tasten, was sie gerade tippen
-- die **nächste Taste** ist in monkeytypes Hauptfarbe umrandet; Layer- und Shift-Tasten, die dafür nötig sind, gestrichelt
-- **Hände** darunter mit dem Finger, der die nächste Taste drücken sollte
-- kurzes Aufblinken nach jedem Anschlag (richtig/falsch) wie bei monkeytypes eigener Keymap
-- Farben und Schrift kommen aus deinem monkeytype-Theme
+- every key you press, live — including layer, mod-tap and one-shot keys (after unlocking, see below)
+- the active layer switches the labels; holding Shift or AltGr/Option shows what each key types right now
+- the **next key** outlined in monkeytype's main color; layer and Shift keys you need for it are dashed
+- **hands** with the finger that should press the next key
+- a short flash after each keystroke (correct/wrong), like monkeytype's own keymap
+- colors and font taken from your monkeytype theme
 
-## In monkeytype installieren
+## Install
 
-**Variante A – Chrome-Erweiterung** (empfohlen)
-1. `chrome://extensions` öffnen und oben rechts den **Entwicklermodus** einschalten.
-2. **Entpackte Erweiterung laden** und den Ordner `monkeytype/extension` aus diesem Repo wählen.
-3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Split**: anklicken, **Tastatur verbinden**, die Tastatur wählen.
-4. **Entsperren**: Die App zeigt die Tasten, die du halten musst (Halcyon Kyria ab Werk **T + Y**, ca. 6 s).
-   Solange blockiert sie die Eingabe in monkeytype, damit nichts im Test landet.
+Chrome, Edge, Brave and Arc work. Firefox and Safari cannot talk to USB keyboards (no WebHID).
 
-**Variante B – Userscript**: `monkeytype/halcyon-monkeytype.user.js` in Tampermonkey oder Violentmonkey installieren.
+1. Download `split-keyboard-for-monkeytype-<version>.zip` from the
+   [latest release](../../releases/latest) and unzip it into a folder that stays put (not your Downloads folder).
+2. Open `chrome://extensions` (Edge: `edge://extensions`) and switch on **Developer mode**.
+3. Click **Load unpacked** and pick the unzipped folder.
+4. Open or reload monkeytype.com. Click **⌨ Split** in the bottom right corner → **Connect keyboard** and pick your
+   keyboard. Close the Vial app first — only one program can talk to the keyboard at a time.
 
-Ab dann verbindet sich die Tastatur beim Öffnen von monkeytype automatisch. Das Entsperren gilt bis zum Abstecken.
-Im Menü **⌨ Split** stellst du außerdem ein:
-- Systemlayout (Deutsch Mac/Windows, US, EurKEY)
-- Basis-Layer
-- Hände, Hinweise und Layer-Leiste an oder aus
-- Encoder und Module zeigen
-- monkeytypes eigene Keymap ausblenden
-- Größe
+From then on the keyboard connects automatically whenever you open monkeytype. To update, download the new zip,
+replace the folder's contents and click the reload icon of the extension in `chrome://extensions`.
 
-### Gesperrt oder entsperrt
+Prefer userscripts? `monkeytype/halcyon-monkeytype.user.js` works in Tampermonkey or Violentmonkey.
 
-- **Gesperrt** (Standard): Die Keymap mit allen Layern liest die App immer, dafür ist kein Entsperren nötig.
-  Tasten sieht sie, sobald sie ein Zeichen tippen. Reine Layer-Tasten (MO, LT …) schicken dem PC nichts,
-  deshalb erscheint ein Layer erst mit der ersten Taste, die darauf tippt.
-- **Entsperrt**: jede Taste live, auch Layer- und Mod-Tap-Tasten, schon beim Halten. Gilt bis zum Abstecken.
+## Locked and unlocked: why Vial asks you to unlock
 
-### VIA-Tastaturen
+Vial deliberately keeps one thing secret: **which keys are being pressed right now**. Any program on your computer
+that can open the keyboard's USB interface could otherwise read every keystroke — including passwords — without
+needing any special permission. That would make the keyboard a perfect keylogger. So Vial only reveals its switch
+matrix after you prove you are physically at the keyboard: you hold a special key combination for a few seconds.
 
-Tastaturen mit VIA statt Vial gehen auch. Ihre Firmware enthält kein Layout, deshalb fragt das Menü einmal nach
-der VIA-Definition (JSON), z. B. aus [the-via/keyboards](https://github.com/the-via/keyboards). Sie wird pro Tastatur
-gespeichert. VIA sperrt die Tasten nicht, die Anzeige ist also sofort live. Voraussetzung: VIA-Protokoll 12 (QMK ab 2022).
+What this means here:
 
-### Ohne Verbindung
+- **Locked** (default, nothing to do): the extension still reads your complete keymap with all layers — that is not
+  secret. It sees a key once it types a character into monkeytype, and shows the layer that character is on.
+  Pure layer keys (MO, LT …) send nothing to the computer, so a layer only appears with the first key you type on it.
+- **Unlocked**: every key shows live as you press it, including layer and mod-tap keys while you hold them, and
+  the extension can learn which key you prefer for characters that exist more than once (see below).
+  Click **Unlock** in the ⌨ menu and hold the highlighted keys until the bar is full (about 6 seconds).
+  The keyboard stays unlocked until you unplug it.
 
-Die zuletzt gelesene Keymap bleibt gespeichert. Ist die Tastatur nicht angesteckt oder in einem anderen Tab verbunden,
-zeigt das Overlay sie aus dem Speicher („gespeichert“) mit einem Knopf zum Verbinden.
+While it is unlocked, any program with access to the keyboard could read your keystrokes. Unplugging the keyboard
+locks it again; **Lock** in the menu does it right away. Keyboards built with Vial's "insecure" option never lock.
 
-### Mehrere Wege zum selben Zeichen
+The extension itself sends nothing anywhere: everything stays in your browser (see [Privacy](#privacy)).
 
-Liegt ein Zeichen auf mehreren Tasten (z. B. „1“ in der Zahlenreihe und auf einem Layer), merkt sich die App den
-Weg, den du zuletzt benutzt hast, und zeigt ihn als nächste Taste. Gelernt wird im entsperrten Modus direkt aus der
-Tastatur, egal welches Fenster den Fokus hat; gesperrt nutzt
-die App das Gemerkte und den Weg, den sie für das erwartete Zeichen vorgeschlagen hat. Im Menü: **Vergessen**.
+## Menu (⌨ Split)
 
-Nach Änderungen am Code: `node tools/build-monkeytype.mjs`, dann unter `chrome://extensions` die Erweiterung neu laden.
-Der Build legt auch das Store-Paket `dist/split-keyboard-for-monkeytype-<version>.zip` an.
+- System layout: Automatic, US, EurKEY, German (Windows/Linux), German (Mac). It decides the labels (KC_Y shows
+  as "Z" on German) and which key types a character. EurKEY can't be detected automatically — pick it here.
+- Base layer, if you switched to e.g. Colemak with a DF() key
+- Hands, next-key hint and the layer/modifier bar on or off
+- Show encoders & modules, hide monkeytype's own keymap, size
+- Other keyboard: switch between several keyboards; the last one used reconnects automatically
 
-## Lizenz
+### Characters on more than one key
 
-GPL-3.0-or-later, siehe [LICENSE](LICENSE). Aussehen und Verhalten der Tastatur sind an monkeytypes Keymap angelehnt
-([monkeytypegame/monkeytype](https://github.com/monkeytypegame/monkeytype), GPL-3.0):
-- `sub-alt`-Tasten und `sub`-Beschriftung
-- nächste Taste in der Hauptfarbe
-- 250 ms Treffer-/Fehler-Blinken
-- Homing-Striche auf den Zeigefinger-Tasten
+If a character exists on several keys (say "1" in the number row and on a layer), the extension remembers the key
+you used last and shows that one as the next key. It learns while unlocked, straight from the keyboard, no matter
+which window has focus. While locked it uses what it learned plus the key it suggested for the expected character.
+**Forget** in the menu clears it.
 
-## Eigenständige Version (ohne monkeytype)
+### VIA keyboards
 
-Zusätzlich gibt es einen eigenen Tipptrainer mit derselben Tastatur-Anzeige (Fehler-Heatmap, Code-Modus,
-schwebendes Fenster).
+Keyboards with VIA instead of Vial work too. VIA firmware does not contain the layout, so the menu asks once for the
+keyboard's VIA definition (JSON), e.g. from [the-via/keyboards](https://github.com/the-via/keyboards); it is kept per
+keyboard. VIA never locks, so the view is live right away. Requires VIA protocol 12 (QMK from 2022 on).
 
-## Starten
+### Without a connection
+
+The last keymap read is kept. When the keyboard is unplugged or connected in another tab, the extension shows it from
+storage ("stored") with a button to connect.
+
+## Privacy
+
+The extension only runs on monkeytype.com. It reads your keyboard over WebHID and keystrokes on the page to draw the
+keyboard. Nothing is sent to any server; settings, your keymap and learned key preferences are stored in the browser's
+local storage for monkeytype.com and can be removed by clearing that site's data.
+
+## Limits
+
+- The extension replays QMK's logic for layers, mod-tap and layer-tap (tapping term, permissive hold,
+  hold on other key press), one-shot, tri-layer, TG/TO/DF/TT and Caps Word, because the firmware doesn't report its
+  layer state. Combos, key overrides, auto shift and tap-dance double taps are not replayed.
+- Vial protocol 6 or newer (QMK keycodes from 2022) is required.
+- The Vial app and this extension should not talk to the keyboard at the same time.
+
+## Standalone trainer (without monkeytype)
+
+The repository also contains a standalone typing trainer with the same keyboard view (error heatmap, code mode,
+floating window):
 
 ```bash
 python3 tools/serve.py
 ```
 
-Dann <http://localhost:8137> in **Chrome, Edge, Brave oder Arc** öffnen. Safari und Firefox können kein WebHID.
-Ohne Tastatur zum Ausprobieren: <http://localhost:8137/?demo> (Halcyon Kyria mit splitkbs Standard-Keymap).
+Then open <http://localhost:8137> in Chrome or Edge. Without a keyboard: <http://localhost:8137/?demo>.
+On Windows, `tools/start-windows.cmd` starts the server and opens the trainer.
 
-## Bedienung
+## Development
 
-1. **Tastatur verbinden** → im Browser-Dialog die Halcyon auswählen. Danach verbindet die App sich beim
-   nächsten Öffnen automatisch, auch nach dem Ab- und Anstecken.
-2. **Entsperren**: Vial gibt die Schalter-Matrix erst nach einem Unlock heraus (Schutz gegen Keylogger).
-   Die App zeigt, welche Tasten du halten musst (bei der Halcyon Kyria ab Werk **T + Y**), und füllt einen
-   Balken (ca. 6 s). Das Entsperren gilt bis zum Abstecken der Tastatur.
-   - **Live-Modus** (entsperrt): Jede physische Taste wird angezeigt, auch Layer-Tasten, Mod-Taps und
-     One-Shots. Das funktioniert auch, wenn das Fenster im Hintergrund ist.
-   - **Fokus-Modus** (gesperrt): Die App sieht nur, was als Tastendruck im fokussierten Fenster ankommt.
-3. **Tippen**: Zeit oder Wörter, Deutsch/English, Satzzeichen, Zahlen und **Code** (Klammern und Operatoren,
-   ideal zum Üben des Symbol-Layers). <kbd>Tab</kbd> startet einen neuen Test.
-4. **Nächste Taste**: Die Tastatur markiert, wo das nächste Zeichen liegt. Muss dafür ein Layer gehalten
-   werden oder ⇧ bzw. ⌥ dazu, werden diese Tasten gestrichelt mitmarkiert.
-5. Nach dem Test: WPM, Genauigkeit, Raw, Konstanz, Verlauf und eine **Fehler-Heatmap** auf deiner Tastatur.
+Plain HTML/CSS/JS without dependencies.
 
-### Mit monkeytype zusammen
-
-**Schwebendes Fenster** öffnet die Tastatur als immer-oben-Fenster (Document Picture-in-Picture).
-Leg es über oder neben monkeytype.com: Im Live-Modus zeigt es deine Tasten, Layer und Modifier, während du
-dort tippst. In monkeytype selbst wird dafür nichts installiert oder eingeschleust.
-Ohne Picture-in-Picture: <http://localhost:8137/?view=keyboard> in einem eigenen Fenster öffnen.
-
-### Einstellungen (⚙)
-
-- **Tastaturlayout im System**: automatisch erkannt. Wählbar sind Deutsch (Mac), Deutsch (Windows/Linux) und US.
-  Davon hängen die Beschriftungen ab (KC_Y wird zu „Z“, KC_SCLN zu „Ö“ …) und welche Taste ein Zeichen tippt.
-- **Basis-Layer**: falls du per DF() z. B. auf Colemak umgeschaltet hast. DF-Tasten erkennt die App selbst.
-- Layer-Chips: **Klick** hält einen Layer zur Ansicht fest, **Doppelklick** benennt ihn um.
-- **Tastatur wieder sperren**: Vial-Unlock zurücknehmen.
-
-## Grenzen
-
-- Die App bildet QMKs Logik für Layer, Mod-Tap und Layer-Tap (Tapping Term, Permissive Hold,
-  Hold on Other Key Press), One-Shot, Tri-Layer, TG/TO/DF/TT und Caps Word auf dem Rechner nach,
-  denn die Firmware meldet ihren Layer-Zustand nicht. Combos, Key Overrides, Auto Shift und
-  Doppel-Tap bei Tap Dance sind nicht nachgebildet.
-- Vial-Protokoll ≥ 6 (QMK-Keycodes ab 2022) ist vorausgesetzt. Die Halcyon-Firmware erfüllt das.
-- Die Vial-App und diese App sollten nicht gleichzeitig mit der Tastatur sprechen. Zwei Fenster dieser
-  App übergeben sich die Tastatur gegenseitig.
-- Sicherheit: Solange die Tastatur entsperrt ist, kann jedes Programm mit HID-Zugriff die Matrix lesen.
-  Nach dem Abstecken ist sie wieder gesperrt.
-
-## Entwicklung
-
-Reines HTML/CSS/JS ohne Build-Schritt und ohne Abhängigkeiten. Code und Bezeichner sind englisch.
-
-| Datei | Inhalt |
+| File | Content |
 |---|---|
-| `js/hid.js` | WebHID-Transport und Vial/VIA-Protokoll (Definition, Keymap, Unlock, Matrix) |
-| `js/xz.js` | XZ/LZMA2-Decoder für die komprimierte Vial-Definition |
-| `js/kle.js` | KLE-Parser und Platzierung wie in vial-gui (inkl. Layout-Optionen/Module) |
-| `js/keycodes.js` | QMK-Keycodes: Dekodierung, Beschriftung, Systemlayouts US/DE |
-| `js/state.js` | Nachbildung des Firmware-Zustands aus der Matrix; DOM-Modifier |
-| `js/lookup.js` | Zeichen → Taste/Layer/Modifier (Hinweise, Heatmap), DOM-Code → Taste |
-| `js/keyboard-view.js` | SVG-Tastatur |
-| `js/typing.js`, `js/words.js` | Tipptest und Wortlisten |
-| `js/hands.js` | Finger-Zuordnung aus der Geometrie und Hände-Anzeige |
-| `js/main.js` | eigenständige App: Verbindung, Entsperren, Polling, UI |
-| `monkeytype/overlay.js`, `overlay.css` | Overlay für monkeytype.com |
-| `tools/build-monkeytype.mjs` | bündelt das Overlay zu Erweiterung und Userscript |
-| `tools/mt-fixture.html` | Nachbildung von monkeytypes Test-DOM zum lokalen Testen |
-
-Tests (Node ≥ 20, Python 3 für die Testdaten):
+| `js/hid.js` | WebHID transport and Vial/VIA protocol (definition, keymap, unlock, matrix) |
+| `js/xz.js` | XZ/LZMA2 decoder for the compressed Vial definition |
+| `js/kle.js` | KLE parser and key placement as in vial-gui (incl. layout options/modules) |
+| `js/keycodes.js` | QMK keycodes: decoding, labels, host layouts |
+| `js/state.js` | firmware state replayed from the matrix; locked-mode snapshot; DOM modifiers |
+| `js/lookup.js` | character → key/layer/modifiers (hints, preferences), DOM code → key |
+| `js/keyboard-view.js` | SVG keyboard |
+| `js/typing.js`, `js/words.js` | typing test and word lists |
+| `js/hands.js` | finger assignment from the geometry and hands view |
+| `js/main.js` | standalone trainer |
+| `monkeytype/overlay.js`, `overlay.css` | the monkeytype extension |
+| `tools/build-monkeytype.mjs` | bundles the extension, the userscript and the zip in `dist/` |
+| `tools/mt-fixture.html` | copy of monkeytype's test DOM for local testing |
 
 ```bash
-node tools/test-app.mjs   # Protokoll gegen simulierte Vial-Firmware, Layout, Zustandsmodell, Labels
-node tools/test-xz.mjs    # XZ-Decoder gegen Pythons lzma
-node tools/build-demo.mjs # demo/halcyon-kyria.json neu erzeugen
-node tools/build-monkeytype.mjs  # Erweiterung + Userscript bauen
+node tools/test-app.mjs          # protocol against simulated Vial/VIA firmware, layout, state model, labels
+node tools/test-xz.mjs           # XZ decoder against Python's lzma
+node tools/build-monkeytype.mjs  # build extension, userscript and dist/*.zip
+node tools/make-icons.mjs        # redraw the icons
 ```
 
-Die Halcyon-Kyria-Dateien in `tools/fixtures/` stammen aus
-[splitkb/qmk_userspace](https://github.com/splitkb/qmk_userspace) (Branch `halcyon`, GPL-2.0-or-later).
+Feature requests and known issues: [BACKLOG.md](BACKLOG.md).
+
+## License
+
+GPL-3.0-or-later, see [LICENSE](LICENSE). The keyboard's look and behavior follow monkeytype's keymap
+([monkeytypegame/monkeytype](https://github.com/monkeytypegame/monkeytype), GPL-3.0): `sub-alt` keys and `sub`
+legends, next key in the main color, 250 ms hit/miss flash, homing bars on the index keys.
+The Halcyon Kyria files in `tools/fixtures/` come from [splitkb/qmk_userspace](https://github.com/splitkb/qmk_userspace)
+(branch `halcyon`, GPL-2.0-or-later).

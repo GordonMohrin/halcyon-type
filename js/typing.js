@@ -11,7 +11,7 @@ export class TypingTest {
   constructor(els, hooks) {
     this.els = els;
     this.hooks = hooks;
-    this.config = { mode: 'time', time: 30, words: 25, lang: 'de', punctuation: false, numbers: false, code: false };
+    this.config = { mode: 'time', time: 30, words: 25, lang: 'en', punctuation: false, numbers: false, code: false };
     this.timer = null;
     this.#bindInput();
     window.addEventListener('resize', () => this.#placeCaret());

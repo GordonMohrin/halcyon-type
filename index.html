@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Halcyon Type</title>
+  <title>Split Keyboard – typing trainer</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='7' width='26' height='18' rx='4' fill='%2316181d' stroke='%237fd1b9' stroke-width='2'/><rect x='8' y='12' width='4' height='4' rx='1' fill='%237fd1b9'/><rect x='14' y='12' width='4' height='4' rx='1' fill='%23e9e6dc'/><rect x='20' y='12' width='4' height='4' rx='1' fill='%23e9e6dc'/></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -11,59 +11,59 @@
   <header class="top">
     <div class="brand">
       <span class="logo" aria-hidden="true"></span>
-      <span class="title">halcyon<b>type</b></span>
+      <span class="title">split<b>keyboard</b></span>
     </div>
     <div class="top-actions">
-      <span id="status" class="status off">Keine Tastatur verbunden</span>
-      <button id="btn-connect" class="btn primary">Tastatur verbinden</button>
+      <span id="status" class="status off">No keyboard connected</span>
+      <button id="btn-connect" class="btn primary">Connect keyboard</button>
       <button id="btn-demo" class="btn">Demo</button>
-      <button id="btn-float" class="btn" title="Tastatur als schwebendes Fenster über anderen Apps (z. B. monkeytype)">Schwebendes Fenster</button>
-      <button id="btn-settings" class="btn icon" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+      <button id="btn-float" class="btn" title="Show the keyboard in a floating window on top of other apps (e.g. monkeytype)">Floating window</button>
+      <button id="btn-settings" class="btn icon" title="Settings" aria-label="Settings">⚙</button>
     </div>
     <div id="settings" class="settings" hidden>
-      <label>Tastaturlayout im System
+      <label>System keyboard layout
         <select id="host-layout">
-          <option value="auto">Automatisch</option>
-          <option value="de-mac">Deutsch (Mac)</option>
-          <option value="de-win">Deutsch (Windows/Linux)</option>
+          <option value="auto">Automatic</option>
+          <option value="de-mac">German (Mac)</option>
+          <option value="de-win">German (Windows/Linux)</option>
           <option value="us">US (QWERTY)</option>
-          <option value="eurkey">EurKEY (US, Umlaute über AltGr)</option>
+          <option value="eurkey">EurKEY (US, umlauts via AltGr)</option>
         </select>
         <span id="host-detected" class="muted"></span>
       </label>
-      <label>Basis-Layer
+      <label>Base layer
         <select id="base-layer"></select>
       </label>
-      <label class="check"><input type="checkbox" id="hints"> Nächste Taste auf der Tastatur zeigen</label>
+      <label class="check"><input type="checkbox" id="hints"> Show the next key on the keyboard</label>
       <div id="kb-info" class="kb-info muted"></div>
-      <button id="btn-lock" class="btn small" hidden>Tastatur wieder sperren</button>
+      <button id="btn-lock" class="btn small" hidden>Lock keyboard again</button>
     </div>
   </header>
 
   <div id="unlock-banner" class="banner" hidden>
     <div>
-      <b>Live-Anzeige freischalten.</b>
-      Vial gibt die gedrückten Tasten erst nach einem Entsperren heraus (Schutz gegen Keylogger).
-      Danach siehst du jede Taste – auch Layer-, Mod-Tap- und One-Shot-Tasten – selbst wenn das Fenster nicht im Vordergrund ist.
-      Bis dahin zeigt die App nur, was im fokussierten Fenster ankommt.
+      <b>Enable the live view.</b>
+      Vial only reveals which keys are pressed after you unlock the keyboard. This protects against keyloggers: otherwise any program with HID access could read every keystroke.
+      Once unlocked, you see every key, including layer, mod-tap and one-shot keys, even when this window is in the background. The unlock lasts until you unplug the keyboard.
+      Until then, the app only sees keys typed into the focused window.
     </div>
     <div class="banner-actions">
-      <button id="btn-unlock" class="btn primary">Entsperren</button>
-      <button id="btn-unlock-later" class="btn">Später</button>
+      <button id="btn-unlock" class="btn primary">Unlock</button>
+      <button id="btn-unlock-later" class="btn">Later</button>
     </div>
   </div>
 
   <div id="via-banner" class="banner" hidden>
     <div>
-      <b>Layout-Datei nötig.</b>
-      <span id="via-text">Diese Tastatur hat VIA statt Vial.</span>
-      Lade einmal ihre VIA-Definition (JSON), z. B. aus github.com/the-via/keyboards. Sie wird für diese Tastatur gespeichert.
+      <b>Layout file needed.</b>
+      <span id="via-text">This keyboard uses VIA instead of Vial.</span>
+      Load its VIA definition (JSON) once, e.g. from github.com/the-via/keyboards. It is saved for this keyboard.
       <span id="via-error" class="error-text"></span>
     </div>
     <div class="banner-actions">
       <input id="via-file" type="file" accept=".json,application/json" hidden>
-      <button id="btn-via-file" class="btn primary">Layout-Datei laden</button>
-      <button id="btn-via-cancel" class="btn">Abbrechen</button>
+      <button id="btn-via-file" class="btn primary">Load layout file</button>
+      <button id="btn-via-cancel" class="btn">Cancel</button>
     </div>
   </div>
 
@@ -71,14 +71,14 @@
     <section id="trainer" class="trainer">
       <div id="config" class="config">
         <div class="group">
-          <button data-set="punctuation:toggle">Satzzeichen</button>
-          <button data-set="numbers:toggle">Zahlen</button>
-          <button data-set="code:toggle" title="Klammern, Operatoren und Sonderzeichen – ideal für den Symbol-Layer">Code</button>
+          <button data-set="punctuation:toggle">Punctuation</button>
+          <button data-set="numbers:toggle">Numbers</button>
+          <button data-set="code:toggle" title="Brackets, operators and special characters – ideal for practicing your symbol layer">Code</button>
         </div>
         <span class="sep"></span>
         <div class="group">
-          <button data-set="mode:time">Zeit</button>
-          <button data-set="mode:words">Wörter</button>
+          <button data-set="mode:time">Time</button>
+          <button data-set="mode:words">Words</button>
         </div>
         <span class="sep"></span>
         <div class="group" id="cfg-time">
@@ -100,28 +100,28 @@
           <div id="caret" class="caret"></div>
           <div id="words" class="words"></div>
         </div>
-        <textarea id="words-input" class="words-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Eingabe"></textarea>
-        <div class="focus-hint">Klicke hier oder drücke eine Taste, um weiterzuschreiben</div>
+        <textarea id="words-input" class="words-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Typing input"></textarea>
+        <div class="focus-hint">Click here or press any key to continue typing</div>
       </div>
 
       <div id="result" class="result" hidden>
         <div class="big">
           <div><div class="label">wpm</div><div id="r-wpm" class="value"></div></div>
-          <div><div class="label">genauigkeit</div><div id="r-acc" class="value"></div></div>
-          <div id="r-best" class="best" hidden>Neue Bestleistung!</div>
+          <div><div class="label">acc</div><div id="r-acc" class="value"></div></div>
+          <div id="r-best" class="best" hidden>New personal best!</div>
         </div>
         <svg id="r-chart" class="chart" preserveAspectRatio="none"></svg>
         <div class="small-stats">
           <div><span class="label">test</span><span id="r-type"></span></div>
           <div><span class="label">raw</span><span id="r-raw"></span></div>
-          <div title="richtig / falsch / zu viel / ausgelassen"><span class="label">zeichen</span><span id="r-chars"></span></div>
-          <div><span class="label">konstanz</span><span id="r-cons"></span></div>
-          <div><span class="label">zeit</span><span id="r-time"></span></div>
+          <div title="correct / incorrect / extra / missed"><span class="label">characters</span><span id="r-chars"></span></div>
+          <div><span class="label">consistency</span><span id="r-cons"></span></div>
+          <div><span class="label">time</span><span id="r-time"></span></div>
         </div>
         <div id="r-worst" class="worst"></div>
         <div class="result-actions">
-          <button id="btn-again" class="btn primary">Nächster Test <kbd>Tab</kbd></button>
-          <button id="btn-heat" class="btn">Fehler-Heatmap ein/aus</button>
+          <button id="btn-again" class="btn primary">Next test <kbd>Tab</kbd></button>
+          <button id="btn-heat" class="btn">Toggle error heatmap</button>
         </div>
       </div>
     </section>
@@ -133,25 +133,25 @@
       </div>
       <div id="kbd" class="kbd"></div>
       <div id="kbd-empty" class="kbd-empty">
-        <p>Verbinde deine Vial-Tastatur (Chrome/Edge), dann erscheinen hier dein Layout, deine Keymap und jede gedrückte Taste.</p>
-        <p class="muted">Ohne Tastatur zum Ausprobieren: <button class="link" onclick="HT.loadDemo()">Demo mit Halcyon Kyria laden</button></p>
+        <p>Connect your Vial keyboard (Chrome/Edge) to see your layout, your keymap and every key you press here.</p>
+        <p class="muted">No keyboard at hand? <button class="link" onclick="HT.loadDemo()">Load the Halcyon Kyria demo</button></p>
       </div>
       <div id="hint" class="hint"></div>
     </section>
   </main>
 
   <footer class="foot">
-    <span><kbd>Tab</kbd> neuer Test</span>
-    <span><kbd>⌥</kbd>/<kbd>Strg</kbd> + <kbd>⌫</kbd> Wort löschen</span>
-    <span>Layer-Chip anklicken = Layer festhalten · Doppelklick = umbenennen</span>
+    <span><kbd>Tab</kbd> new test</span>
+    <span><kbd>⌥</kbd>/<kbd>Ctrl</kbd> + <kbd>⌫</kbd> delete word</span>
+    <span>Click a layer chip to pin it · double-click to rename</span>
   </footer>
 
   <div id="unlock-dialog" class="modal" hidden>
     <div class="modal-box">
-      <h2>Tastatur entsperren</h2>
+      <h2>Unlock keyboard</h2>
       <p id="unlock-text"></p>
       <div class="progress"><div id="unlock-progress"></div></div>
-      <button id="btn-unlock-cancel" class="btn">Abbrechen</button>
+      <button id="btn-unlock-cancel" class="btn">Cancel</button>
     </div>
   </div>
 

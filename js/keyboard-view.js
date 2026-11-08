@@ -45,7 +45,7 @@ export class KeyboardView {
     const pad = 6;
     const svg = el('svg', {
       viewBox: `${-pad} ${-pad} ${width * U + pad * 2} ${height * U + pad * 2}`,
-      class: 'kbd-svg', role: 'img', 'aria-label': 'Tastatur',
+      class: 'kbd-svg', role: 'img', 'aria-label': 'Keyboard',
     });
     this.svg = svg;
     for (const key of keys) {
