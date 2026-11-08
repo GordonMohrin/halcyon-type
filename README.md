@@ -5,6 +5,8 @@ press, the next key to hit and the finger to use. Works with any keyboard runnin
 without changing its firmware. Built for split keyboards such as the splitkb Halcyon series (Kyria, Corne,
 Lily58, Elora, Ferris, Sofle).
 
+![Typing on monkeytype with an Elora: the next key is outlined, holding the layer key shows layer 2](docs/demo.gif)
+
 You type in the real monkeytype with your own account; results and personal bests are saved there as usual.
 Below the words you get:
 
@@ -14,6 +16,8 @@ Below the words you get:
 - **hands** with the finger that should press the next key
 - a short flash after each keystroke (correct/wrong), like monkeytype's own keymap
 - colors and font taken from your monkeytype theme
+
+![The keyboard below monkeytype's words: the next character "`" needs the dashed layer-2 thumb key](docs/screenshot.png)
 
 ## Install
 
