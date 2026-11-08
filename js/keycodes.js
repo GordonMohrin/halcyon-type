@@ -199,6 +199,8 @@ const DE_WIN_ALTGR = {
   0x14: '@', 0x08: '€', 0x10: 'µ', 0x1F: '²', 0x20: '³', 0x24: '{', 0x25: '[', 0x26: ']', 0x27: '}', 0x2D: '\\',
   0x30: '~', 0x64: '|',
 };
+// EurKEY (US layout with European letters on AltGr): the characters German and most monkeytype word lists need
+const EURKEY_ALTGR = { 0x04: 'äÄ', 0x12: 'öÖ', 0x18: 'üÜ', 0x16: 'ß', 0x22: '€' };
 const NUMPAD = { 0x54: '/', 0x55: '*', 0x56: '-', 0x57: '+', 0x63: '.', 0x67: '=', 0x85: ',' };
 
 function buildLayout(id, name, printable, altTable, altMode, swapYZ) {
@@ -233,6 +235,7 @@ export const HOST_LAYOUTS = {
   us: buildLayout('us', 'US (QWERTY)', US_PRINTABLE, null, 'none', false),
   'de-mac': buildLayout('de-mac', 'Deutsch (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
   'de-win': buildLayout('de-win', 'Deutsch (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
+  eurkey: buildLayout('eurkey', 'EurKEY (US, Umlaute über AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
 };
 
 /** Best-effort detection of the OS keyboard layout via the Keyboard Map API. */

@@ -1436,6 +1436,8 @@ const DE_WIN_ALTGR = {
   0x14: '@', 0x08: '€', 0x10: 'µ', 0x1F: '²', 0x20: '³', 0x24: '{', 0x25: '[', 0x26: ']', 0x27: '}', 0x2D: '\\',
   0x30: '~', 0x64: '|',
 };
+// EurKEY (US layout with European letters on AltGr): the characters German and most monkeytype word lists need
+const EURKEY_ALTGR = { 0x04: 'äÄ', 0x12: 'öÖ', 0x18: 'üÜ', 0x16: 'ß', 0x22: '€' };
 const NUMPAD = { 0x54: '/', 0x55: '*', 0x56: '-', 0x57: '+', 0x63: '.', 0x67: '=', 0x85: ',' };
 
 function buildLayout(id, name, printable, altTable, altMode, swapYZ) {
@@ -1470,6 +1472,7 @@ const HOST_LAYOUTS = {
   us: buildLayout('us', 'US (QWERTY)', US_PRINTABLE, null, 'none', false),
   'de-mac': buildLayout('de-mac', 'Deutsch (Mac)', DE_PRINTABLE, DE_MAC_ALT, 'option', true),
   'de-win': buildLayout('de-win', 'Deutsch (Windows/Linux)', DE_PRINTABLE, DE_WIN_ALTGR, 'altgr', true),
+  eurkey: buildLayout('eurkey', 'EurKEY (US, Umlaute über AltGr)', US_PRINTABLE, EURKEY_ALTGR, 'altgr', false),
 };
 
 /** Best-effort detection of the OS keyboard layout via the Keyboard Map API. */
@@ -2728,7 +2731,7 @@ class HalcyonMonkeytype {
     m.append(actions);
 
     const host = h('select', { onchange: (e) => { this.prefs.hostLayout = e.target.value; this.#savePrefs(); this.applyHostLayout(); } },
-      ...[['auto', 'Automatisch'], ['de-mac', 'Deutsch (Mac)'], ['de-win', 'Deutsch (Windows/Linux)'], ['us', 'US']].map(([v, t]) =>
+      ...[['auto', 'Automatisch'], ['de-mac', 'Deutsch (Mac)'], ['de-win', 'Deutsch (Windows/Linux)'], ['us', 'US'], ['eurkey', 'EurKEY (US + Umlaute)']].map(([v, t]) =>
         h('option', { value: v, ...(this.prefs.hostLayout === v ? { selected: true } : {}) }, t)));
     m.append(row(h('span', {}, 'Systemlayout'), host));
     if (this.kb) {
@@ -2751,6 +2754,7 @@ class HalcyonMonkeytype {
   #statusText() {
     if (this.source === 'none') return 'Keine Tastatur verbunden';
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
+    if (this.source === 'cache') return 'Keymap aus dem Speicher (zuletzt gelesen). Für Live-Anzeige und aktuelle Layer die Tastatur verbinden.';
     const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
     if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
     return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken). '
@@ -2758,7 +2762,7 @@ class HalcyonMonkeytype {
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
+    const short = this.source === 'none' ? 'Split' : this.source === 'demo' ? 'Demo' : this.source === 'cache' ? 'gespeichert' : this.matrix ? 'live' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -2773,6 +2777,11 @@ class HalcyonMonkeytype {
       n.append(h('div', {}, `Halte ${names} gedrückt, bis der Balken voll ist (ca. 6 s). monkeytype bekommt solange keine Eingaben.`),
         h('div', { class: 'hmt-progress' }, h('div', { style: `width:${progress || 0}%` })),
         h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
+      return;
+    }
+    if (this.source === 'cache') {
+      n.append(h('span', {}, 'Deine Keymap aus dem Speicher. Verbinde die Tastatur für die Live-Anzeige.'),
+        h('button', { class: 'hmt-btn primary', onclick: () => this.connectClicked() }, 'Verbinden'));
       return;
     }
     if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
@@ -2876,7 +2885,7 @@ class HalcyonMonkeytype {
 
   async connect(device) {
     if (this.device === device && this.source === 'hid') return;
-    await this.disconnect();
+    await this.disconnect(false);
     this.channel?.postMessage({ type: 'claim', from: this.tabId });
     try {
       const transport = new HidTransport(device);
@@ -2888,10 +2897,12 @@ class HalcyonMonkeytype {
       });
       Object.assign(this, { device, transport, vial, source: 'hid' });
       store.set('lastDevice', deviceId(device));
-      this.setupKeyboard({
+      const data = {
         name: vial.name, uid: vial.uid, definition: vial.definition, keymap: vial.keymap, layerCount: vial.layerCount,
         encoders: vial.encoders, settings: vial.settings, tapDances: vial.tapDances, layoutOptionsValue: vial.layoutOptionsValue,
-      });
+      };
+      store.set('keymap', data); // shown from storage while the keyboard is unplugged or busy in another tab
+      this.setupKeyboard(data);
       this.#pollForState();
       this.#updateStatus();
     } catch (err) {
@@ -2902,11 +2913,21 @@ class HalcyonMonkeytype {
     }
   }
 
-  async disconnect() {
+  async disconnect(showStored = true) {
     this.stopPolling();
     if (this.transport) await this.transport.close();
     this.transport = this.vial = this.device = null;
-    if (this.source === 'hid') this.closeKeyboard();
+    if (this.source === 'hid') {
+      this.closeKeyboard();
+      if (showStored) this.loadStored();
+    }
+  }
+
+  loadStored() {
+    const data = store.get('keymap', null);
+    if (!data?.keymap?.length || this.source === 'hid') return;
+    this.source = 'cache';
+    this.setupKeyboard(data);
   }
 
   async connectClicked() {
@@ -2919,7 +2940,7 @@ class HalcyonMonkeytype {
   }
 
   async loadDemo() {
-    await this.disconnect();
+    await this.disconnect(false);
     this.source = 'demo';
     this.setupKeyboard(DEMO_DATA);
   }
@@ -3191,6 +3212,7 @@ class HalcyonMonkeytype {
     this.#updateStatus();
     const granted = await findGrantedDevice(store.get('lastDevice', null));
     if (granted) await this.connect(granted);
+    if (this.source === 'none') this.loadStored();
   }
 }
 

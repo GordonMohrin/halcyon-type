@@ -228,6 +228,11 @@ const posOf = (layer, kc) => {
   check('decode right-hand mods', decode(parseKeycode('MT(MOD_RSFT, KC_J)')).mods === 0x20);
 }
 
+{
+  const eu = HOST_LAYOUTS.eurkey;
+  check('EurKEY: AltGr+a = ä, AltGr+Shift+o = Ö, base y = y', charFor(0x04, 0x40, eu) === 'ä' && charFor(0x12, 0x60, eu) === 'Ö' && charFor(0x1C, 0, eu) === 'y');
+}
+
 // ---------------------------------------------------------------- fingers
 {
   const all = parseVialLayout(demo.definition);
