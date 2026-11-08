@@ -4,8 +4,7 @@
 export class MockVialDevice extends EventTarget {
   /**
    * demo: object in the format of demo/halcyon-kyria.json
-   * opts: { definitionXz: Uint8Array (lzma-compressed vial.json), unlockKeys: [[r,c]], counterMax, insecure,
-   *         layerReport: answer the layer state query like firmware with layer_report.c }
+   * opts: { definitionXz: Uint8Array (lzma-compressed vial.json), unlockKeys: [[r,c]], counterMax, insecure }
    */
   constructor(demo, opts = {}) {
     super();
@@ -22,8 +21,6 @@ export class MockVialDevice extends EventTarget {
     this.timer = 0;
     this.pressed = new Set(); // "r,c"
     this.requests = 0;
-    this.layerReport = !!opts.layerReport;
-    this.fw = { layers: 0, defaultLayers: 1, mods: 0, oneShotMods: 0, flags: 0 };
   }
 
   async open() { this.opened = true; }
@@ -64,14 +61,6 @@ export class MockVialDevice extends EventTarget {
     if (msg[0] === 0x02 && msg[1] === 0x02) {
       const v = d.layoutOptionsValue >>> 0;
       msg[2] = v >>> 24; msg[3] = (v >> 16) & 0xff; msg[4] = (v >> 8) & 0xff; msg[5] = v & 0xff;
-      return msg;
-    }
-    if (msg[0] === 0x02 && msg[1] === 0x48) {
-      if (!this.layerReport) { msg[0] = 0xff; return msg; } // raw_hid_receive_kb() default: id_unhandled
-      const be = (o, v) => { msg[o] = v >>> 24; msg[o + 1] = (v >> 16) & 0xff; msg[o + 2] = (v >> 8) & 0xff; msg[o + 3] = v & 0xff; };
-      msg[2] = 1;
-      be(3, this.fw.layers); be(7, this.fw.defaultLayers);
-      msg[11] = this.fw.mods; msg[12] = this.fw.oneShotMods; msg[13] = this.fw.flags;
       return msg;
     }
     if (msg[0] === 0x02 && msg[1] === 0x03) {

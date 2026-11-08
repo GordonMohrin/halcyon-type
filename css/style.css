@@ -161,7 +161,7 @@ body:not(.typing) .test-status .count { color: var(--sub); }
   display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: var(--cap);
   border: 1px solid var(--edge); color: var(--dim); font-size: 12px; transition: all .08s;
 }
-.mod .sym { font-size: 15px; width: 16px; text-align: center; }
+.mod .sym { font-size: 15px; min-width: 16px; text-align: center; white-space: nowrap; }
 .mod .lr { display: flex; gap: 2px; font-style: normal; }
 .mod .lr i { font-style: normal; font-size: 9px; width: 13px; height: 13px; display: grid; place-items: center; border-radius: 3px; background: var(--bg); color: var(--dim); }
 .mod .lr i.on { background: var(--mod); color: #14172c; }

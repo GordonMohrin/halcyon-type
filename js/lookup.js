@@ -5,7 +5,8 @@
 import { decode, charFor, tapKeycode, BASIC, MOD_KEYS, FN_MO13, FN_MO23 } from './keycodes.js';
 
 /**
- * kb: { keymap, layerCount, positions: ["r,c", ...], keyX: Map(pos -> x center), centerX, ctx }
+ * kb: { keymap, layerCount, positions: ["r,c", ...], keyX: Map(pos -> x center), centerX, ctx,
+ *       preferred: { char: "layer:r,c" } — the way the user last typed a character that has several }
  */
 export class KeymapIndex {
   constructor(kb, host, baseLayer = 0) {
@@ -104,10 +105,53 @@ export class KeymapIndex {
       if (p.shift) { const m = this.#modAccess('shift', p.layer, p.pos); if (m) modKeys.push(...m); else missing = true; }
       if (p.alt) { const m = this.#modAccess('alt', p.layer, p.pos); if (m) modKeys.push(...m); else missing = true; }
       if (missing) continue;
-      const cost = (p.layer === this.baseLayer ? 0 : 2) + (p.shift ? 1 : 0) + (p.alt ? 1.5 : 0);
+      const preferred = this.kb.preferred?.[ch] === p.layer + ':' + p.pos;
+      const cost = (preferred ? -10 : 0) + (p.layer === this.baseLayer ? 0 : 2) + (p.shift ? 1 : 0) + (p.alt ? 1.5 : 0);
       if (!best || cost < best.cost) best = { target: p.pos, layer: p.layer, layerKeys, modKeys, shift: p.shift, alt: p.alt, cost };
     }
     return best;
+  }
+
+  /** KeyboardEvent.code the key at pos sends when tapped on layer. */
+  codeAt(pos, layer) {
+    const [r, c] = pos.split(',').map(Number);
+    const tap = tapKeycode(this.kb.keymap[layer]?.[r]?.[c] ?? 0, this.kb.ctx);
+    return tap ? BASIC.get(tap.base)?.code : undefined;
+  }
+
+  /** Characters with more than one way to type them. */
+  isAmbiguous(ch) {
+    const list = this.charPaths.get(ch);
+    return !!list && new Set(list.map((p) => p.layer + ':' + p.pos)).size > 1;
+  }
+
+  /**
+   * Unlocked: remember which key typed ch (held: matrix records { pos, layer, kc, downAt }).
+   * Returns true if the preference changed.
+   */
+  learn(ch, code, held) {
+    if (!this.isAmbiguous(ch)) return false;
+    const recs = [...held].sort((a, b) => b.downAt - a.downAt);
+    const rec = recs.find((r) => this.codeAt(r.pos, r.layer) === code);
+    if (!rec || !this.charPaths.get(ch).some((p) => p.pos === rec.pos && p.layer === rec.layer)) return false;
+    const key = rec.layer + ':' + rec.pos;
+    if (!this.kb.preferred || this.kb.preferred[ch] === key) return false;
+    this.kb.preferred[ch] = key;
+    return true;
+  }
+
+  /**
+   * Locked: which key sent a DOM keydown. Prefers the key the hint showed for the expected
+   * character, then the user's preferred way for the typed character, then the shown layer.
+   */
+  resolveTyped(code, ch, expected, preferLayers) {
+    if (expected && this.codeAt(expected.target, expected.layer) === code) return { pos: expected.target, layer: expected.layer };
+    const pref = ch && this.kb.preferred?.[ch];
+    if (pref) {
+      const [l, pos] = pref.split(':');
+      if (this.codeAt(pos, +l) === code) return { pos, layer: +l };
+    }
+    return this.positionsForCode(code, preferLayers)[0] || null;
   }
 
   /**

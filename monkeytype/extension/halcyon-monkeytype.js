@@ -1,5 +1,5 @@
 /*!
- * Halcyon für monkeytype 0.1.0 — live Vial keyboard for monkeytype.com
+ * Ergo Keyboard for Monkeytype 0.2.0 — live Vial keyboard for monkeytype.com
  * https://github.com/GordonMohrin/halcyon-type
  * Copyright (C) 2026 Gordon Mohrin. License: GPL-3.0-or-later (see LICENSE).
  * Keymap look and behavior adapted from monkeytype (https://github.com/monkeytypegame/monkeytype, GPL-3.0).
@@ -928,9 +928,7 @@ const RAW_HID_FILTER = { usagePage: 0xff60, usage: 0x61 };
 const MSG_LEN = 32;
 
 const VIA = { PROTOCOL_VERSION: 0x01, GET_KEYBOARD_VALUE: 0x02, LAYER_COUNT: 0x11, KEYMAP_GET_BUFFER: 0x12, VIAL_PREFIX: 0xfe };
-// LAYER_STATE is not part of VIA: firmware with layer_report.c answers it, also while locked.
-const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03, LAYER_STATE: 0x48 };
-const VIA_UNHANDLED = 0xff;
+const VIA_VALUE = { LAYOUT_OPTIONS: 0x02, SWITCH_MATRIX_STATE: 0x03 };
 const VIAL = {
   KEYBOARD_ID: 0x00, GET_SIZE: 0x01, GET_DEF: 0x02, GET_ENCODER: 0x03, UNLOCK_STATUS: 0x05, UNLOCK_START: 0x06,
   UNLOCK_POLL: 0x07, LOCK: 0x08, QMK_SETTINGS_GET: 0x0a, DYNAMIC_ENTRY_OP: 0x0d,
@@ -1081,7 +1079,6 @@ class VialKeyboard {
     await this.#loadSettings();
     await this.#loadTapDances();
     await this.refreshUnlockStatus();
-    this.layerReport = (await this.layerStatePoll().catch(() => null)) !== null;
     onProgress(1, 'Fertig');
     return this;
   }
@@ -1170,17 +1167,6 @@ class VialKeyboard {
   async lock() {
     await this.t.request([VIA.VIAL_PREFIX, VIAL.LOCK]);
     this.unlocked = false;
-  }
-
-  /**
-   * Layer and modifier state as the firmware sees it, no unlock needed. Only firmware with the
-   * Halcyon Type extension (layer_report.c) answers; others return null.
-   * { layers, defaultLayers (bit masks), mods, oneShotMods, capsWord, capsLock }
-   */
-  async layerStatePoll() {
-    const d = await this.t.request([VIA.GET_KEYBOARD_VALUE, VIA_VALUE.LAYER_STATE], { timeout: 250, retries: 1 });
-    if (d[0] === VIA_UNHANDLED || d[0] !== VIA.GET_KEYBOARD_VALUE || d[1] !== VIA_VALUE.LAYER_STATE || d[2] < 1) return null;
-    return { layers: be32(d, 3), defaultLayers: be32(d, 7), mods: d[11], oneShotMods: d[12], capsWord: !!(d[13] & 1), capsLock: !!(d[13] & 2) };
   }
 
   /** Current switch matrix as an array of rows, each a Uint8Array(cols) of 0/1. Requires unlock. */
@@ -1910,43 +1896,21 @@ class FirmwareModel {
 
 // ---------------------------------------------------------------------------
 // Snapshot without matrix access (Vial locked): pressed keys come from DOM key events of the
-// focused window. Layers and modifiers come from the firmware if it reports them
-// (fw = VialKeyboard.layerStatePoll()); otherwise a layer only shows once a key on it types.
+// focused window. Layer keys send nothing, so a layer only shows once a key on it types.
+// resolved: Map(code -> { pos, layer }) chosen when the key went down (see KeymapIndex.resolveTyped).
 
-const HELD_LAYER_KEYS = new Set(['mo', 'layertap', 'tt', 'osl', 'layermod']);
-
-function lockedSnapshot({ dom, index, viewLayer, baseLayer, fw }) {
+function lockedSnapshot({ dom, index, viewLayer, baseLayer, resolved = new Map() }) {
   const keys = new Map();
-  if (!fw) {
-    let shown = -1;
-    for (const code of dom.codes) {
-      const hits = index.positionsForCode(code, [viewLayer, baseLayer]);
-      if (!hits.length) continue;
-      keys.set(hits[0].pos, { role: 'active' });
-      if (hits[0].layer !== baseLayer && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hits[0].layer);
-    }
-    return {
-      activeMask: (1 << baseLayer) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : baseLayer, defaultLayer: baseLayer,
-      mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
-    };
-  }
-  const base = fw.defaultLayers ? highestBit(fw.defaultLayers) : baseLayer;
-  const mask = fw.layers | (1 << base);
-  const display = highestBit(mask);
+  let shown = -1;
   for (const code of dom.codes) {
-    const hits = index.positionsForCode(code, [display, base]);
-    if (hits.length) keys.set(hits[0].pos, { role: 'active' });
-  }
-  // The firmware doesn't say which key holds a layer: light the layer keys that can do it.
-  for (let l = 0; l < 32; l++) {
-    if (l === base || !(mask & (1 << l))) continue;
-    for (const k of index.layerKeys.get(l) || []) {
-      if (HELD_LAYER_KEYS.has(k.kind) && mask & (1 << k.from) && !keys.has(k.pos)) keys.set(k.pos, { role: 'hold' });
-    }
+    const hit = resolved.get(code) || index.positionsForCode(code, [viewLayer, baseLayer])[0];
+    if (!hit) continue;
+    keys.set(hit.pos, { role: 'active' });
+    if (hit.layer !== baseLayer && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hit.layer);
   }
   return {
-    activeMask: mask, displayLayer: display, defaultLayer: base,
-    mods: fw.mods, oneShotMods: fw.oneShotMods, oneShotLayer: -1, capsWord: fw.capsWord, capsLock: fw.capsLock || dom.capsLock, keys,
+    activeMask: (1 << baseLayer) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : baseLayer, defaultLayer: baseLayer,
+    mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
   };
 }
 
@@ -2283,7 +2247,8 @@ const { decode, charFor, tapKeycode, BASIC, MOD_KEYS, FN_MO13, FN_MO23 } = __m3;
 
 
 /**
- * kb: { keymap, layerCount, positions: ["r,c", ...], keyX: Map(pos -> x center), centerX, ctx }
+ * kb: { keymap, layerCount, positions: ["r,c", ...], keyX: Map(pos -> x center), centerX, ctx,
+ *       preferred: { char: "layer:r,c" } — the way the user last typed a character that has several }
  */
 class KeymapIndex {
   constructor(kb, host, baseLayer = 0) {
@@ -2382,10 +2347,53 @@ class KeymapIndex {
       if (p.shift) { const m = this.#modAccess('shift', p.layer, p.pos); if (m) modKeys.push(...m); else missing = true; }
       if (p.alt) { const m = this.#modAccess('alt', p.layer, p.pos); if (m) modKeys.push(...m); else missing = true; }
       if (missing) continue;
-      const cost = (p.layer === this.baseLayer ? 0 : 2) + (p.shift ? 1 : 0) + (p.alt ? 1.5 : 0);
+      const preferred = this.kb.preferred?.[ch] === p.layer + ':' + p.pos;
+      const cost = (preferred ? -10 : 0) + (p.layer === this.baseLayer ? 0 : 2) + (p.shift ? 1 : 0) + (p.alt ? 1.5 : 0);
       if (!best || cost < best.cost) best = { target: p.pos, layer: p.layer, layerKeys, modKeys, shift: p.shift, alt: p.alt, cost };
     }
     return best;
+  }
+
+  /** KeyboardEvent.code the key at pos sends when tapped on layer. */
+  codeAt(pos, layer) {
+    const [r, c] = pos.split(',').map(Number);
+    const tap = tapKeycode(this.kb.keymap[layer]?.[r]?.[c] ?? 0, this.kb.ctx);
+    return tap ? BASIC.get(tap.base)?.code : undefined;
+  }
+
+  /** Characters with more than one way to type them. */
+  isAmbiguous(ch) {
+    const list = this.charPaths.get(ch);
+    return !!list && new Set(list.map((p) => p.layer + ':' + p.pos)).size > 1;
+  }
+
+  /**
+   * Unlocked: remember which key typed ch (held: matrix records { pos, layer, kc, downAt }).
+   * Returns true if the preference changed.
+   */
+  learn(ch, code, held) {
+    if (!this.isAmbiguous(ch)) return false;
+    const recs = [...held].sort((a, b) => b.downAt - a.downAt);
+    const rec = recs.find((r) => this.codeAt(r.pos, r.layer) === code);
+    if (!rec || !this.charPaths.get(ch).some((p) => p.pos === rec.pos && p.layer === rec.layer)) return false;
+    const key = rec.layer + ':' + rec.pos;
+    if (!this.kb.preferred || this.kb.preferred[ch] === key) return false;
+    this.kb.preferred[ch] = key;
+    return true;
+  }
+
+  /**
+   * Locked: which key sent a DOM keydown. Prefers the key the hint showed for the expected
+   * character, then the user's preferred way for the typed character, then the shown layer.
+   */
+  resolveTyped(code, ch, expected, preferLayers) {
+    if (expected && this.codeAt(expected.target, expected.layer) === code) return { pos: expected.target, layer: expected.layer };
+    const pref = ch && this.kb.preferred?.[ch];
+    if (pref) {
+      const [l, pos] = pref.split(':');
+      if (this.codeAt(pos, +l) === code) return { pos, layer: +l };
+    }
+    return this.positionsForCode(code, preferLayers)[0] || null;
   }
 
   /**
@@ -2532,7 +2540,7 @@ const { FirmwareModel, DomKeyTracker, lockedSnapshot } = __m4;
 const { KeyboardView } = __m5;
 const { KeymapIndex } = __m6;
 const { computeFingers, HandsView } = __m7;
-// Halcyon für monkeytype — live Vial keyboard inside monkeytype.com.
+// Ergo Keyboard for Monkeytype — live Vial keyboard inside monkeytype.com.
 // Runs in the page (extension content script with world MAIN, or userscript), so you
 // type in the real monkeytype with your own account; this only adds the keyboard below
 // the words. Styling follows monkeytype's keymap (theme colors, next-key highlight,
@@ -2547,7 +2555,7 @@ const { computeFingers, HandsView } = __m7;
 
 
 const DEMO_DATA = {"name":"Halcyon Kyria (Demo)","uid":"demo-halcyon-kyria","definition":{"lighting":"vialrgb","matrix":{"rows":8,"cols":12},"layouts":{"labels":["Soldered encoder left",["Halcyon module left","None","Encoder"],"Soldered encoder right",["Halcyon module right","None","Encoder"]],"keymap":[[{"y":0.25,"x":3},"0,3",{"x":9},"4,3"],[{"y":-0.75,"x":2},"0,4",{"x":1},"0,2",{"x":7},"4,2",{"x":1},"4,4"],[{"y":-0.875,"x":5},"0,1",{"x":5},"4,1"],[{"y":-0.625},"0,6","0,5",{"x":13},"4,5","4,6"],[{"y":-0.75,"x":3},"1,3",{"x":9},"5,3"],[{"y":-0.75,"x":2},"1,4",{"x":1},"1,2",{"x":7},"5,2",{"x":1},"5,4"],[{"y":-0.875,"x":5},"1,1",{"x":5},"5,1"],[{"y":-0.625},"1,6","1,5",{"x":13},"5,5","5,6"],[{"y":-0.75,"x":3},"2,3",{"x":9},"6,3"],[{"y":-0.75,"x":2},"2,4",{"x":1},"2,2",{"x":7},"6,2",{"x":1},"6,4"],[{"y":-0.875,"x":5},"2,1",{"x":5},"6,1"],[{"y":-0.625},"2,6","2,5",{"x":13},"6,5","6,6"],[{"y":-0.5,"x":2.5},"3,4",{"x":10},"7,4"],[{"rx":4,"ry":8.175,"y":-4.675,"x":-0.5},"3,2"],[{"rx":10.5,"ry":4.1,"y":2.25,"x":-10.5,"d":true},"1,0\n\n\n1,0\n\n\n\n\n\ne",{"d":true},"0,9\n\n\n1,0",{"d":true},"1,1\n\n\n1,0\n\n\n\n\n\ne",{"x":1,"d":true},"0,0\n\n\n0,0\n\n\n\n\n\ne",{"d":true},"0,1\n\n\n0,0\n\n\n\n\n\ne",{"x":5.25,"d":true},"2,0\n\n\n2,0\n\n\n\n\n\ne",{"d":true},"2,1\n\n\n2,0\n\n\n\n\n\ne",{"x":0.75,"d":true},"3,0\n\n\n3,0\n\n\n\n\n\ne",{"d":true},"4,9\n\n\n3,0",{"d":true},"3,1\n\n\n3,0\n\n\n\n\n\ne"],[{"x":-10.5,"d":true},"0,8\n\n\n1,0",{"d":true},"0,7\n\n\n1,0",{"d":true},"0,10\n\n\n1,0",{"x":1},"0,0\n\n\n0,1\n\n\n\n\n\ne","0,1\n\n\n0,1\n\n\n\n\n\ne",{"x":5.25},"2,0\n\n\n2,1\n\n\n\n\n\ne","2,1\n\n\n2,1\n\n\n\n\n\ne",{"x":0.75,"d":true},"4,8\n\n\n3,0",{"d":true},"4,7\n\n\n3,0",{"d":true},"4,10\n\n\n3,0"],[{"x":-9.5,"d":true},"0,11\n\n\n1,0",{"x":13,"d":true},"4,11\n\n\n3,0"],[{"y":0.5,"x":-10.5},"1,0\n\n\n1,1\n\n\n\n\n\ne",{"d":true},"0,9\n\n\n1,1","1,1\n\n\n1,1\n\n\n\n\n\ne",{"x":11},"3,0\n\n\n3,1\n\n\n\n\n\ne",{"d":true},"4,9\n\n\n3,1","3,1\n\n\n3,1\n\n\n\n\n\ne"],[{"x":-10.5,"d":true},"0,8\n\n\n1,1","0,7\n\n\n1,1",{"d":true},"0,10\n\n\n1,1",{"x":11,"d":true},"4,8\n\n\n3,1","4,7\n\n\n3,1",{"d":true},"4,10\n\n\n3,1"],[{"x":-9.5,"d":true},"0,11\n\n\n1,1",{"x":13,"d":true},"4,11\n\n\n3,1"],[{"rx":13,"ry":8.175,"y":-4.675,"x":-0.5},"7,2"],[{"r":15,"rx":4,"y":-4.675,"x":-0.5},"3,1"],[{"r":30,"y":-2,"x":-0.5},"3,3"],[{"x":-0.5},"3,5"],[{"r":45,"y":-2,"x":-0.5},"2,0"],[{"x":-0.5},"3,0"],[{"r":-45,"rx":13,"y":-5.675,"x":-0.5},"6,0"],[{"x":-0.5},"7,0"],[{"r":-30,"y":-2,"x":-0.5},"7,3"],[{"x":-0.5},"7,5"],[{"r":-15,"y":-1,"x":-0.5},"7,1"]]}},"keymap":[[[0,23,21,8,26,20,43,168,0,0,0,0],[0,10,9,7,22,4,8489,0,0,0,0,0],[57,5,25,6,27,29,225,0,0,0,0,0],[21027,9256,227,47,21030,44,0,0,0,0,0,0],[0,28,24,12,18,19,42,174,0,0,0,0],[0,11,13,14,15,51,12596,0,0,0,0,0],[21029,17,16,54,55,56,229,0,0,0,0,0],[21028,230,231,48,101,44,0,0,0,0,0,0]],[[1,28,19,55,54,52,43,1,1,1,1,1],[1,12,24,8,18,4,8489,1,1,1,1,1],[57,27,14,13,20,51,225,1,1,1,1,1],[21027,9256,227,47,21030,44,1,1,1,1,1,1],[1,9,10,6,21,15,42,1,1,1,1,1],[1,7,11,23,17,22,12589,1,1,1,1,1],[21029,5,16,26,25,29,229,1,1,1,1,1],[21028,230,231,48,101,44,1,1,1,1,1,1]],[[1,5,19,9,26,20,43,1,1,1,1,1],[1,10,23,22,21,4,8489,1,1,1,1,1],[57,25,7,6,27,29,225,1,1,1,1,1],[21027,9256,227,47,21030,44,1,1,1,1,1,1],[1,13,15,24,28,51,42,1,1,1,1,1],[1,16,17,8,12,18,12596,1,1,1,1,1],[21029,14,11,54,55,56,229,1,1,1,1,1],[21028,230,231,48,101,44,1,1,1,1,1,1]],[[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,225,224,226,227,1,1,1,1,1,1],[71,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,75,74,82,77,169,76,1,1,1,1,1],[1,78,80,81,79,170,73,1,1,1,1,1],[1,72,172,174,171,168,70,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1]],[[1,34,33,32,31,30,53,1,1,1,1,1],[1,546,545,544,543,542,565,1,1,1,1,1],[1,47,45,51,563,49,561,1,1,1,1,1],[1,1,1,559,1,1,1,1,1,1,1,1],[1,35,36,37,38,39,46,1,1,1,1,1],[1,547,548,549,550,551,558,1,1,1,1,1],[1,48,557,54,55,56,568,1,1,1,1,1],[1,1,1,560,1,1,1,1,1,1,1,1]],[[1,1,69,68,67,66,1,1,1,1,1,1],[1,1,65,64,63,62,1,1,1,1,1,1],[1,1,61,60,59,58,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,229,228,226,231,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1]],[[1,1,1,21056,1,1,1,1,1,1,1,1],[1,1,1,21057,1,1,1,1,1,1,1,1],[1,1,1,21058,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,30786,30791,30789,30793,30787,1,1,1,1,1,1],[1,1,30792,30790,30794,30788,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1]],[[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1]]],"layerCount":8,"encoders":{"0,0":[170,169],"0,1":[78,75],"0,2":[170,169],"0,3":[78,75],"1,0":[1,1],"1,1":[1,1],"1,2":[1,1],"1,3":[1,1],"2,0":[1,1],"2,1":[1,1],"2,2":[1,1],"2,3":[1,1],"3,0":[1,1],"3,1":[1,1],"3,2":[1,1],"3,3":[1,1],"4,0":[1,1],"4,1":[1,1],"4,2":[1,1],"4,3":[1,1],"5,0":[1,1],"5,1":[1,1],"5,2":[1,1],"5,3":[1,1],"6,0":[1,1],"6,1":[1,1],"6,2":[1,1],"6,3":[1,1],"7,0":[1,1],"7,1":[1,1],"7,2":[1,1],"7,3":[1,1]},"settings":{"tappingTerm":200,"permissiveHold":false,"holdOnOtherKeyPress":false,"oneshotTimeout":0,"tappingToggle":5},"tapDances":[],"layoutOptionsValue":5};
-const CSS_TEXT = "/* Halcyon für monkeytype — uses monkeytype's theme variables so it follows every theme.\n   Key look follows monkeytype's keymap (Keymap.tsx, GPL-3.0): sub-alt keys, sub legends,\n   main-colored next key, 250 ms main/error flash, bg-colored homing bars. */\n\n.hmt {\n  --hmt-scale: 1;\n  --hmt-main: var(--main-color, #e2b714);\n  --hmt-bg: var(--bg-color, #323437);\n  --hmt-sub: var(--sub-color, #646669);\n  --hmt-subalt: var(--sub-alt-color, #2c2e31);\n  --hmt-text: var(--text-color, #d1d0c5);\n  --hmt-error: var(--error-color, #ca4754);\n  width: min(100%, calc(720px * var(--hmt-scale)));\n  margin: 1.6rem auto 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 0.6rem;\n  font-family: var(--font, \"Roboto Mono\", monospace);\n  color: var(--hmt-sub);\n  user-select: none;\n}\n\n.hmt [hidden] { display: none !important; }\n\n.hmt-bar { display: flex; justify-content: center; gap: 1.6rem; font-size: 0.75rem; min-height: 1.2rem; }\n.hmt-layers, .hmt-mods { display: flex; gap: 0.3rem; align-items: center; }\n.hmt-layer {\n  all: unset; cursor: pointer; width: 1.35rem; height: 1.35rem; border-radius: 0.3rem; text-align: center; line-height: 1.35rem;\n  color: var(--hmt-sub); background: transparent; font-size: 0.72rem; transition: color .12s, background .12s;\n}\n.hmt-layer.active { color: var(--hmt-text); background: var(--hmt-subalt); }\n.hmt-layer.shown { color: var(--hmt-bg); background: var(--hmt-main); }\n.hmt-layer.base:not(.shown) { box-shadow: inset 0 0 0 1px var(--hmt-sub); }\n.hmt-layer.pinned { outline: 1px dashed var(--hmt-main); outline-offset: 2px; }\n.hmt-mod { width: 1.35rem; height: 1.35rem; line-height: 1.35rem; text-align: center; border-radius: 0.3rem; font-size: 0.85rem; color: var(--hmt-sub); opacity: .55; transition: all .08s; }\n.hmt-mod.on { opacity: 1; color: var(--hmt-bg); background: var(--hmt-main); }\n.hmt-mod.oneshot { opacity: 1; color: var(--hmt-main); box-shadow: inset 0 0 0 1px var(--hmt-main); }\n\n.hmt-kbd { width: 100%; display: flex; justify-content: center; }\n.hmt .kbd-svg { width: 100%; height: auto; overflow: visible; }\n.hmt-hands { width: min(100%, calc(330px * var(--hmt-scale))); margin-top: 0.4rem; }\n.hmt .hands-svg { width: 100%; height: auto; display: block; }\n.hmt-hint { font-size: 0.75rem; min-height: 1rem; color: var(--hmt-sub); }\n.hmt-notice { display: flex; gap: 0.6rem; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.8rem; color: var(--hmt-text); max-width: 34rem; text-align: center; }\n.hmt-notice:empty { display: none; }\n.hmt-progress { width: 100%; height: 0.35rem; border-radius: 0.2rem; background: var(--hmt-subalt); overflow: hidden; }\n.hmt-progress > div { height: 100%; background: var(--hmt-main); transition: width .12s linear; }\n\n/* keys */\n.hmt .key .cap { fill: var(--hmt-subalt); stroke: transparent; stroke-width: 0; transition: fill .25s ease-out, stroke .1s; }\n.hmt .key text { fill: var(--hmt-sub); text-anchor: middle; dominant-baseline: middle; font-family: var(--font, \"Roboto Mono\", monospace); pointer-events: none; }\n.hmt .key .sub { font-size: 9px; text-anchor: start; dominant-baseline: auto; opacity: .75; }\n.hmt .key .alt { font-size: 9px; text-anchor: end; dominant-baseline: auto; opacity: .75; }\n.hmt .key .enc-dir { font-size: 10px; }\n.hmt .key .homing { fill: transparent; }\n.hmt .key.homing-key .homing { fill: var(--hmt-bg); }\n.hmt .key .pending-bar { fill: var(--hmt-bg); }\n.hmt .key .badge { display: none; }\n.hmt .key.k-none .cap { fill-opacity: .35; }\n.hmt .key.k-none text { display: none; }\n.hmt .key.through text { opacity: .45; }\n.hmt .key.k-modded .main { fill: var(--hmt-text); }\n.hmt .key.k-dead .main { opacity: .35; }\n\n.hmt .key.pressed .cap { fill: var(--hmt-main); transition: none; }\n.hmt .key.pressed text { fill: var(--hmt-bg); opacity: 1; }\n.hmt .key.pressed .homing { fill: var(--hmt-subalt); }\n.hmt .key.pressed.pending .cap { fill: color-mix(in srgb, var(--hmt-main) 45%, var(--hmt-subalt)); }\n.hmt .key.pressed.hold .cap { fill: var(--hmt-text); }\n.hmt .key.flash-ok .cap { fill: var(--hmt-main); transition: none; }\n.hmt .key.flash-err .cap { fill: var(--hmt-error); transition: none; }\n.hmt .key.flash-ok text, .hmt .key.flash-err text { fill: var(--hmt-bg); }\n\n.hmt .key.hint .cap { stroke: var(--hmt-main); stroke-width: 3; }\n.hmt .key.hint text { fill: var(--hmt-text); }\n.hmt .key.hint-layer .cap { stroke: var(--hmt-main); stroke-width: 2.2; stroke-dasharray: 5 4; }\n.hmt .key.hint-mod .cap { stroke: var(--hmt-text); stroke-width: 2.2; stroke-dasharray: 5 4; }\n.hmt .key.unlock .cap { stroke: var(--hmt-main); stroke-width: 3; fill: color-mix(in srgb, var(--hmt-main) 25%, var(--hmt-subalt)); }\n.hmt .key.unlock.pressed .cap { fill: var(--hmt-main); }\n\n/* hands */\n.hmt .hand .palm, .hmt .hand .finger { fill: var(--hmt-subalt); fill-opacity: .7; stroke: transparent; stroke-width: 0; transition: stroke .1s; }\n.hmt .hand .finger.target { stroke: var(--hmt-main); stroke-width: 3.5; fill: var(--hmt-bg); fill-opacity: 1; }\n.hmt .hand .finger.helper-layer { stroke: var(--hmt-main); stroke-width: 2.5; stroke-dasharray: 5 4; }\n.hmt .hand .finger.helper-mod { stroke: var(--hmt-text); stroke-width: 2.5; stroke-dasharray: 5 4; }\n\n/* monkeytype's own keymap is replaced while a Halcyon is shown */\nbody.halcyon-hide-mt-keymap [data-ui-element=\"keymap\"] { display: none !important; }\n\n/* control pill */\n.hmt-pill { position: fixed; right: 0.8rem; bottom: 0.8rem; z-index: 99999; font-family: var(--font, \"Roboto Mono\", monospace); font-size: 0.75rem; }\n.hmt-pill-btn {\n  all: unset; cursor: pointer; padding: 0.35rem 0.7rem; border-radius: 0.5rem; background: var(--sub-alt-color, #2c2e31);\n  color: var(--sub-color, #646669); opacity: .7; transition: opacity .15s, color .15s;\n}\n.hmt-pill-btn:hover { opacity: 1; color: var(--text-color, #d1d0c5); }\n.hmt-pill[data-state=\"live\"] .hmt-pill-btn { color: var(--main-color, #e2b714); }\n.hmt-menu {\n  position: absolute; right: 0; bottom: calc(100% + 0.5rem); width: 19rem; padding: 0.9rem; border-radius: 0.6rem;\n  background: var(--bg-color, #323437); border: 2px solid var(--sub-alt-color, #2c2e31); color: var(--text-color, #d1d0c5);\n  display: flex; flex-direction: column; gap: 0.55rem; box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, .35);\n}\n.hmt-menu[hidden] { display: none; }\n.hmt-menu-title { color: var(--main-color, #e2b714); font-size: 0.85rem; }\n.hmt-menu-status { color: var(--sub-color, #646669); line-height: 1.4; }\n.hmt-menu-row { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }\n.hmt-menu select, .hmt-menu input[type=\"range\"] { font: inherit; color: var(--text-color, #d1d0c5); background: var(--sub-alt-color, #2c2e31); border: none; border-radius: 0.35rem; padding: 0.2rem 0.4rem; max-width: 11rem; }\n.hmt-check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }\n.hmt-check input { accent-color: var(--main-color, #e2b714); }\n.hmt-btn, .hmt-notice .hmt-btn {\n  all: unset; cursor: pointer; padding: 0.3rem 0.7rem; border-radius: 0.4rem; background: var(--sub-alt-color, #2c2e31);\n  color: var(--text-color, #d1d0c5); font-family: inherit; font-size: 0.75rem; transition: filter .12s;\n}\n.hmt-btn:hover { filter: brightness(1.2); }\n.hmt-btn.primary { background: var(--main-color, #e2b714); color: var(--bg-color, #323437); }\n.hmt-muted { color: var(--sub-color, #646669); }\n";
+const CSS_TEXT = "/* Ergo Keyboard for Monkeytype — uses monkeytype's theme variables so it follows every theme.\n   Key look follows monkeytype's keymap (Keymap.tsx, GPL-3.0): sub-alt keys, sub legends,\n   main-colored next key, 250 ms main/error flash, bg-colored homing bars. */\n\n.hmt {\n  --hmt-scale: 1;\n  --hmt-main: var(--main-color, #e2b714);\n  --hmt-bg: var(--bg-color, #323437);\n  --hmt-sub: var(--sub-color, #646669);\n  --hmt-subalt: var(--sub-alt-color, #2c2e31);\n  --hmt-text: var(--text-color, #d1d0c5);\n  --hmt-error: var(--error-color, #ca4754);\n  width: min(100%, calc(720px * var(--hmt-scale)));\n  margin: 1.6rem auto 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 0.6rem;\n  font-family: var(--font, \"Roboto Mono\", monospace);\n  color: var(--hmt-sub);\n  user-select: none;\n}\n\n.hmt [hidden] { display: none !important; }\n\n.hmt-bar { display: flex; justify-content: center; gap: 1.6rem; font-size: 0.75rem; min-height: 1.2rem; }\n.hmt-layers, .hmt-mods { display: flex; gap: 0.3rem; align-items: center; }\n.hmt-layer {\n  all: unset; cursor: pointer; width: 1.35rem; height: 1.35rem; border-radius: 0.3rem; text-align: center; line-height: 1.35rem;\n  color: var(--hmt-sub); background: transparent; font-size: 0.72rem; transition: color .12s, background .12s;\n}\n.hmt-layer.active { color: var(--hmt-text); background: var(--hmt-subalt); }\n.hmt-layer.shown { color: var(--hmt-bg); background: var(--hmt-main); }\n.hmt-layer.base:not(.shown) { box-shadow: inset 0 0 0 1px var(--hmt-sub); }\n.hmt-layer.pinned { outline: 1px dashed var(--hmt-main); outline-offset: 2px; }\n.hmt-mod { min-width: 1.35rem; height: 1.35rem; padding: 0 0.4rem; box-sizing: border-box; line-height: 1.35rem; text-align: center; white-space: nowrap; border-radius: 0.3rem; font-size: 0.85rem; color: var(--hmt-sub); opacity: .55; transition: all .08s; }\n.hmt-mod.on { opacity: 1; color: var(--hmt-bg); background: var(--hmt-main); }\n.hmt-mod.oneshot { opacity: 1; color: var(--hmt-main); box-shadow: inset 0 0 0 1px var(--hmt-main); }\n\n.hmt-kbd { width: 100%; display: flex; justify-content: center; }\n.hmt .kbd-svg { width: 100%; height: auto; overflow: visible; }\n.hmt-hands { width: min(100%, calc(330px * var(--hmt-scale))); margin-top: 0.4rem; }\n.hmt .hands-svg { width: 100%; height: auto; display: block; }\n.hmt-hint { font-size: 0.75rem; min-height: 1rem; color: var(--hmt-sub); }\n.hmt-notice { display: flex; gap: 0.6rem; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.8rem; color: var(--hmt-text); max-width: 34rem; text-align: center; }\n.hmt-notice:empty { display: none; }\n.hmt-progress { width: 100%; height: 0.35rem; border-radius: 0.2rem; background: var(--hmt-subalt); overflow: hidden; }\n.hmt-progress > div { height: 100%; background: var(--hmt-main); transition: width .12s linear; }\n\n/* keys */\n.hmt .key .cap { fill: var(--hmt-subalt); stroke: transparent; stroke-width: 0; transition: fill .25s ease-out, stroke .1s; }\n.hmt .key text { fill: var(--hmt-sub); text-anchor: middle; dominant-baseline: middle; font-family: var(--font, \"Roboto Mono\", monospace); pointer-events: none; }\n.hmt .key .sub { font-size: 9px; text-anchor: start; dominant-baseline: auto; opacity: .75; }\n.hmt .key .alt { font-size: 9px; text-anchor: end; dominant-baseline: auto; opacity: .75; }\n.hmt .key .enc-dir { font-size: 10px; }\n.hmt .key .homing { fill: transparent; }\n.hmt .key.homing-key .homing { fill: var(--hmt-bg); }\n.hmt .key .pending-bar { fill: var(--hmt-bg); }\n.hmt .key .badge { display: none; }\n.hmt .key.k-none .cap { fill-opacity: .35; }\n.hmt .key.k-none text { display: none; }\n.hmt .key.through text { opacity: .45; }\n.hmt .key.k-modded .main { fill: var(--hmt-text); }\n.hmt .key.k-dead .main { opacity: .35; }\n\n.hmt .key.pressed .cap { fill: var(--hmt-main); transition: none; }\n.hmt .key.pressed text { fill: var(--hmt-bg); opacity: 1; }\n.hmt .key.pressed .homing { fill: var(--hmt-subalt); }\n.hmt .key.pressed.pending .cap { fill: color-mix(in srgb, var(--hmt-main) 45%, var(--hmt-subalt)); }\n.hmt .key.pressed.hold .cap { fill: var(--hmt-text); }\n.hmt .key.flash-ok .cap { fill: var(--hmt-main); transition: none; }\n.hmt .key.flash-err .cap { fill: var(--hmt-error); transition: none; }\n.hmt .key.flash-ok text, .hmt .key.flash-err text { fill: var(--hmt-bg); }\n\n.hmt .key.hint .cap { stroke: var(--hmt-main); stroke-width: 3; }\n.hmt .key.hint text { fill: var(--hmt-text); }\n.hmt .key.hint-layer .cap { stroke: var(--hmt-main); stroke-width: 2.2; stroke-dasharray: 5 4; }\n.hmt .key.hint-mod .cap { stroke: var(--hmt-text); stroke-width: 2.2; stroke-dasharray: 5 4; }\n.hmt .key.unlock .cap { stroke: var(--hmt-main); stroke-width: 3; fill: color-mix(in srgb, var(--hmt-main) 25%, var(--hmt-subalt)); }\n.hmt .key.unlock.pressed .cap { fill: var(--hmt-main); }\n\n/* hands */\n.hmt .hand .palm, .hmt .hand .finger { fill: var(--hmt-subalt); fill-opacity: .7; stroke: transparent; stroke-width: 0; transition: stroke .1s; }\n.hmt .hand .finger.target { stroke: var(--hmt-main); stroke-width: 3.5; fill: var(--hmt-bg); fill-opacity: 1; }\n.hmt .hand .finger.helper-layer { stroke: var(--hmt-main); stroke-width: 2.5; stroke-dasharray: 5 4; }\n.hmt .hand .finger.helper-mod { stroke: var(--hmt-text); stroke-width: 2.5; stroke-dasharray: 5 4; }\n\n/* monkeytype's own keymap is replaced while a Halcyon is shown */\nbody.halcyon-hide-mt-keymap [data-ui-element=\"keymap\"] { display: none !important; }\n\n/* control pill */\n.hmt-pill { position: fixed; right: 0.8rem; bottom: 0.8rem; z-index: 99999; font-family: var(--font, \"Roboto Mono\", monospace); font-size: 0.75rem; }\n.hmt-pill-btn {\n  all: unset; cursor: pointer; padding: 0.35rem 0.7rem; border-radius: 0.5rem; background: var(--sub-alt-color, #2c2e31);\n  color: var(--sub-color, #646669); opacity: .7; transition: opacity .15s, color .15s;\n}\n.hmt-pill-btn:hover { opacity: 1; color: var(--text-color, #d1d0c5); }\n.hmt-pill[data-state=\"live\"] .hmt-pill-btn { color: var(--main-color, #e2b714); }\n.hmt-menu {\n  position: absolute; right: 0; bottom: calc(100% + 0.5rem); width: 19rem; padding: 0.9rem; border-radius: 0.6rem;\n  background: var(--bg-color, #323437); border: 2px solid var(--sub-alt-color, #2c2e31); color: var(--text-color, #d1d0c5);\n  display: flex; flex-direction: column; gap: 0.55rem; box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, .35);\n}\n.hmt-menu[hidden] { display: none; }\n.hmt-menu-title { color: var(--main-color, #e2b714); font-size: 0.85rem; }\n.hmt-menu-status { color: var(--sub-color, #646669); line-height: 1.4; }\n.hmt-menu-row { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }\n.hmt-menu select, .hmt-menu input[type=\"range\"] { font: inherit; color: var(--text-color, #d1d0c5); background: var(--sub-alt-color, #2c2e31); border: none; border-radius: 0.35rem; padding: 0.2rem 0.4rem; max-width: 11rem; }\n.hmt-check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }\n.hmt-check input { accent-color: var(--main-color, #e2b714); }\n.hmt-btn, .hmt-notice .hmt-btn {\n  all: unset; cursor: pointer; padding: 0.3rem 0.7rem; border-radius: 0.4rem; background: var(--sub-alt-color, #2c2e31);\n  color: var(--text-color, #d1d0c5); font-family: inherit; font-size: 0.75rem; transition: filter .12s;\n}\n.hmt-btn:hover { filter: brightness(1.2); }\n.hmt-btn.primary { background: var(--main-color, #e2b714); color: var(--bg-color, #323437); }\n.hmt-muted { color: var(--sub-color, #646669); }\n";
 const POLL_MS = 12;
 
 const store = {
@@ -2589,10 +2597,11 @@ class HalcyonMonkeytype {
     this.source = 'none';
     this.kb = null;
     this.matrix = false;
-    this.fw = null; // layer state reported by the firmware while locked
     this.pollToken = 0;
     this.previewLayer = null;
     this.lastPressed = null;
+    this.resolved = new Map(); // locked: DOM code -> key chosen when it went down
+    this.recentPresses = [];   // unlocked: last matrix presses, to learn which key typed a character
     this.prefs = {
       hints: true, hands: true, bar: true, hideMtKeymap: true, modules: false, size: 1, hostLayout: 'auto',
       ...store.get('prefs', {}),
@@ -2628,10 +2637,10 @@ class HalcyonMonkeytype {
     this.view = new KeyboardView(this.kbdEl, { fontScale: 0.78 });
     this.hands = new HandsView(this.handsEl);
 
-    this.statusEl = h('span', { class: 'hmt-status' }, 'Halcyon');
+    this.statusEl = h('span', { class: 'hmt-status' }, 'Ergo');
     this.menuEl = h('div', { class: 'hmt-menu', hidden: true });
     this.pill = h('div', { class: 'hmt-pill' },
-      h('button', { class: 'hmt-pill-btn', title: 'Halcyon-Tastatur', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
+      h('button', { class: 'hmt-pill-btn', title: 'Ergo Keyboard for Monkeytype', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
       this.menuEl);
     document.body.appendChild(this.pill);
     document.addEventListener('click', (e) => { if (!this.menuEl.hidden && !this.pill.contains(e.target)) this.menuEl.hidden = true; });
@@ -2668,7 +2677,7 @@ class HalcyonMonkeytype {
         if (key === 'modules' && this.kb) this.setupKeyboard(this.kbData);
       } }), label);
 
-    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Halcyon für monkeytype'));
+    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Ergo Keyboard for Monkeytype'));
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
     const actions = row();
     if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
@@ -2689,6 +2698,11 @@ class HalcyonMonkeytype {
     }
     m.append(check('hints', 'Nächste Taste markieren'), check('hands', 'Hände anzeigen'), check('bar', 'Layer- und Modifier-Leiste'),
       check('modules', 'Encoder & Module zeigen'), check('hideMtKeymap', 'monkeytype-Keymap ausblenden'));
+    const learned = this.kb ? Object.keys(this.kb.preferred).length : 0;
+    if (learned) {
+      m.append(row(h('span', { class: 'hmt-muted', title: 'Zeichen, die auf mehreren Tasten liegen: gezeigt wird der Weg, den du zuletzt benutzt hast.' },
+        `${learned} bevorzugte Tasten gemerkt`), btn('Vergessen', () => this.#forgetPreferred())));
+    }
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
     m.append(row(h('span', {}, 'Größe'), size));
@@ -2699,13 +2713,12 @@ class HalcyonMonkeytype {
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
     const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
     if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
-    if (this.vial?.layerReport) return 'Gesperrt – Layer und Modifier meldet die Firmware, Tasten kommen aus monkeytype. ' + keymap;
-    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken) '
-      + 'oder mit der Firmware-Erweiterung layer_report.c. ' + keymap;
+    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken). '
+      + 'Ein Layer erscheint, sobald eine Taste darauf tippt. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : this.fw ? 'gesperrt · Layer' : 'gesperrt';
+    const short = this.source === 'none' ? 'Ergo' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -2722,7 +2735,7 @@ class HalcyonMonkeytype {
         h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
       return;
     }
-    if (this.source === 'hid' && !this.matrix && !this.vial?.layerReport && !store.get('unlockDismissed', false)) {
+    if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
       n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
         h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
         h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
@@ -2771,6 +2784,7 @@ class HalcyonMonkeytype {
     const { fingers, homing } = computeFingers(placed, def.matrix.rows);
     this.kb = {
       ...data, placed, positions, keyX, centerX: placed.width / 2, ctx, fingers, homing,
+      preferred: store.get('paths.' + data.uid, {}),
       usedLayers: data.keymap.map((layer, i) => i === 0 || layer.some((row) => row.some((kc) => kc !== KC_TRNS && kc !== KC_NO))),
     };
     this.model = new FirmwareModel(data.keymap, data.settings, data.tapDances);
@@ -2867,10 +2881,8 @@ class HalcyonMonkeytype {
     this.setupKeyboard(DEMO_DATA);
   }
 
-  /** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
   #pollForState() {
     if (this.vial?.unlocked) this.startPolling();
-    else if (this.vial?.layerReport) this.startLayerPolling();
     else this.stopPolling();
   }
 
@@ -2900,35 +2912,21 @@ class HalcyonMonkeytype {
       if (!current()) return;
       const before = new Set(this.model.held.keys());
       if (this.model.update(pressed, performance.now())) {
-        for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
+        for (const p of pressed) {
+          if (before.has(p)) continue;
+          this.lastPressed = p;
+          const rec = this.model.held.get(p);
+          if (rec) this.recentPresses = [...this.recentPresses.slice(-7), { pos: p, layer: rec.layer, downAt: rec.downAt }];
+        }
         this.render();
       }
     });
     this.#updateStatus();
   }
 
-  startLayerPolling() {
-    this.stopPolling();
-    let last = '';
-    this.#pollLoop(async (current) => {
-      const fw = await this.vial.layerStatePoll();
-      if (!current() || !fw) return;
-      const key = JSON.stringify(fw);
-      if (key === last) return;
-      const first = !this.fw;
-      last = key;
-      this.fw = fw;
-      const base = fw.defaultLayers ? 31 - Math.clz32(fw.defaultLayers) : 0;
-      if (base !== this.model.defaultLayer && base < this.kb.layerCount) this.setBaseLayer(base);
-      else this.render();
-      if (first) this.#updateStatus();
-    });
-  }
-
   stopPolling() {
     this.pollToken++;
     this.matrix = false;
-    this.fw = null;
     this.model?.update([], performance.now());
   }
 
@@ -2980,7 +2978,7 @@ class HalcyonMonkeytype {
   render() {
     if (!this.kb) return;
     const snap = this.matrix ? this.model.snapshot()
-      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, fw: this.fw });
+      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, resolved: this.resolved });
     this.snap = snap;
     const layer = this.previewLayer ?? snap.displayLayer;
     const mask = snap.activeMask | (1 << snap.defaultLayer) | (1 << layer);
@@ -3081,14 +3079,44 @@ class HalcyonMonkeytype {
     this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + Taste' : '';
   }
 
+  // ---------------------------------------------------------------- preferred keys
+
+  #onKeydown(e) {
+    const ch = e.key.length === 1 ? e.key : null;
+    if (this.matrix) {
+      // the matrix poll may see the press a few ms after the DOM event
+      if (ch) setTimeout(() => this.#learn(ch, e.code), 60);
+      return;
+    }
+    const expectedChar = this.#nextChar();
+    const expected = expectedChar ? this.index.pathFor(expectedChar) : null;
+    const hit = this.index.resolveTyped(e.code, ch, expected, [this.view.layer, this.model.defaultLayer]);
+    if (!hit) return;
+    this.resolved.set(e.code, hit);
+    this.lastPressed = hit.pos;
+  }
+
+  #learn(ch, code) {
+    if (!this.kb || !this.index.learn(ch, code, this.recentPresses.filter((p) => performance.now() - p.downAt < 500))) return;
+    store.set('paths.' + this.kb.uid, this.kb.preferred);
+    this.lastHintChar = undefined;
+    this.#updateHint();
+  }
+
+  #forgetPreferred() {
+    this.kb.preferred = {};
+    store.set('paths.' + this.kb.uid, {});
+    this.lastHintChar = undefined;
+    this.#updateHint();
+  }
+
   // ---------------------------------------------------------------- events
 
   #bind() {
     this.dom.onChange((e) => {
-      if (e && e.type === 'keydown' && !this.matrix && this.index) {
-        const hit = this.index.positionsForCode(e.code, [this.view.layer, this.model.defaultLayer])[0];
-        if (hit) this.lastPressed = hit.pos;
-      }
+      if (!e) this.resolved.clear();
+      else if (e.type === 'keyup') this.resolved.delete(e.code);
+      else if (e.type === 'keydown' && this.index) this.#onKeydown(e);
       this.render();
     });
     window.addEventListener('blur', () => this.render());

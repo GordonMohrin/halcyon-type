@@ -1,4 +1,4 @@
-// Halcyon für monkeytype — live Vial keyboard inside monkeytype.com.
+// Ergo Keyboard for Monkeytype — live Vial keyboard inside monkeytype.com.
 // Runs in the page (extension content script with world MAIN, or userscript), so you
 // type in the real monkeytype with your own account; this only adds the keyboard below
 // the words. Styling follows monkeytype's keymap (theme colors, next-key highlight,
@@ -55,10 +55,11 @@ class HalcyonMonkeytype {
     this.source = 'none';
     this.kb = null;
     this.matrix = false;
-    this.fw = null; // layer state reported by the firmware while locked
     this.pollToken = 0;
     this.previewLayer = null;
     this.lastPressed = null;
+    this.resolved = new Map(); // locked: DOM code -> key chosen when it went down
+    this.recentPresses = [];   // unlocked: last matrix presses, to learn which key typed a character
     this.prefs = {
       hints: true, hands: true, bar: true, hideMtKeymap: true, modules: false, size: 1, hostLayout: 'auto',
       ...store.get('prefs', {}),
@@ -94,10 +95,10 @@ class HalcyonMonkeytype {
     this.view = new KeyboardView(this.kbdEl, { fontScale: 0.78 });
     this.hands = new HandsView(this.handsEl);
 
-    this.statusEl = h('span', { class: 'hmt-status' }, 'Halcyon');
+    this.statusEl = h('span', { class: 'hmt-status' }, 'Ergo');
     this.menuEl = h('div', { class: 'hmt-menu', hidden: true });
     this.pill = h('div', { class: 'hmt-pill' },
-      h('button', { class: 'hmt-pill-btn', title: 'Halcyon-Tastatur', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
+      h('button', { class: 'hmt-pill-btn', title: 'Ergo Keyboard for Monkeytype', onclick: (e) => { e.stopPropagation(); this.#toggleMenu(); } }, '⌨ ', this.statusEl),
       this.menuEl);
     document.body.appendChild(this.pill);
     document.addEventListener('click', (e) => { if (!this.menuEl.hidden && !this.pill.contains(e.target)) this.menuEl.hidden = true; });
@@ -134,7 +135,7 @@ class HalcyonMonkeytype {
         if (key === 'modules' && this.kb) this.setupKeyboard(this.kbData);
       } }), label);
 
-    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Halcyon für monkeytype'));
+    m.append(h('div', { class: 'hmt-menu-title' }, this.kb ? this.kb.name : 'Ergo Keyboard for Monkeytype'));
     m.append(h('div', { class: 'hmt-menu-status' }, this.#statusText()));
     const actions = row();
     if (!('hid' in navigator)) actions.append(h('span', { class: 'hmt-muted' }, 'Kein WebHID – Chrome/Edge nötig'));
@@ -155,6 +156,11 @@ class HalcyonMonkeytype {
     }
     m.append(check('hints', 'Nächste Taste markieren'), check('hands', 'Hände anzeigen'), check('bar', 'Layer- und Modifier-Leiste'),
       check('modules', 'Encoder & Module zeigen'), check('hideMtKeymap', 'monkeytype-Keymap ausblenden'));
+    const learned = this.kb ? Object.keys(this.kb.preferred).length : 0;
+    if (learned) {
+      m.append(row(h('span', { class: 'hmt-muted', title: 'Zeichen, die auf mehreren Tasten liegen: gezeigt wird der Weg, den du zuletzt benutzt hast.' },
+        `${learned} bevorzugte Tasten gemerkt`), btn('Vergessen', () => this.#forgetPreferred())));
+    }
     const size = h('input', { type: 'range', min: '0.6', max: '1.5', step: '0.05', value: String(this.prefs.size),
       oninput: (e) => { this.prefs.size = +e.target.value; this.#savePrefs(); } });
     m.append(row(h('span', {}, 'Größe'), size));
@@ -165,13 +171,12 @@ class HalcyonMonkeytype {
     if (this.source === 'demo') return 'Demo (Halcyon Kyria)';
     const keymap = `Keymap (${this.kb?.usedLayers.filter(Boolean).length} Layer) direkt aus der Tastatur gelesen, dafür ist kein Entsperren nötig.`;
     if (this.matrix) return 'Live – jede Taste, Layer und Modifier. ' + keymap;
-    if (this.vial?.layerReport) return 'Gesperrt – Layer und Modifier meldet die Firmware, Tasten kommen aus monkeytype. ' + keymap;
-    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken) '
-      + 'oder mit der Firmware-Erweiterung layer_report.c. ' + keymap;
+    return 'Gesperrt – Layer-Tasten sieht die App erst nach dem Entsperren (gilt bis zum Abstecken). '
+      + 'Ein Layer erscheint, sobald eine Taste darauf tippt. ' + keymap;
   }
 
   #updateStatus() {
-    const short = this.source === 'none' ? 'Halcyon' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : this.fw ? 'gesperrt · Layer' : 'gesperrt';
+    const short = this.source === 'none' ? 'Ergo' : this.source === 'demo' ? 'Demo' : this.matrix ? 'live' : 'gesperrt';
     this.statusEl.textContent = short;
     this.pill.dataset.state = this.source === 'hid' ? (this.matrix ? 'live' : 'locked') : this.source;
     this.#renderNotice();
@@ -188,7 +193,7 @@ class HalcyonMonkeytype {
         h('button', { class: 'hmt-btn', onclick: () => { this.unlocking = null; } }, 'Abbrechen'));
       return;
     }
-    if (this.source === 'hid' && !this.matrix && !this.vial?.layerReport && !store.get('unlockDismissed', false)) {
+    if (this.source === 'hid' && !this.matrix && !store.get('unlockDismissed', false)) {
       n.append(h('span', {}, 'Gesperrt sieht die App Layer-Tasten nicht. Einmal entsperren gilt bis zum Abstecken.'),
         h('button', { class: 'hmt-btn primary', onclick: () => this.runUnlock() }, 'Entsperren'),
         h('button', { class: 'hmt-btn', onclick: () => { store.set('unlockDismissed', true); this.#renderNotice(); } }, 'Später'));
@@ -237,6 +242,7 @@ class HalcyonMonkeytype {
     const { fingers, homing } = computeFingers(placed, def.matrix.rows);
     this.kb = {
       ...data, placed, positions, keyX, centerX: placed.width / 2, ctx, fingers, homing,
+      preferred: store.get('paths.' + data.uid, {}),
       usedLayers: data.keymap.map((layer, i) => i === 0 || layer.some((row) => row.some((kc) => kc !== KC_TRNS && kc !== KC_NO))),
     };
     this.model = new FirmwareModel(data.keymap, data.settings, data.tapDances);
@@ -333,10 +339,8 @@ class HalcyonMonkeytype {
     this.setupKeyboard(DEMO_DATA);
   }
 
-  /** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
   #pollForState() {
     if (this.vial?.unlocked) this.startPolling();
-    else if (this.vial?.layerReport) this.startLayerPolling();
     else this.stopPolling();
   }
 
@@ -366,35 +370,21 @@ class HalcyonMonkeytype {
       if (!current()) return;
       const before = new Set(this.model.held.keys());
       if (this.model.update(pressed, performance.now())) {
-        for (const p of pressed) if (!before.has(p)) this.lastPressed = p;
+        for (const p of pressed) {
+          if (before.has(p)) continue;
+          this.lastPressed = p;
+          const rec = this.model.held.get(p);
+          if (rec) this.recentPresses = [...this.recentPresses.slice(-7), { pos: p, layer: rec.layer, downAt: rec.downAt }];
+        }
         this.render();
       }
     });
     this.#updateStatus();
   }
 
-  startLayerPolling() {
-    this.stopPolling();
-    let last = '';
-    this.#pollLoop(async (current) => {
-      const fw = await this.vial.layerStatePoll();
-      if (!current() || !fw) return;
-      const key = JSON.stringify(fw);
-      if (key === last) return;
-      const first = !this.fw;
-      last = key;
-      this.fw = fw;
-      const base = fw.defaultLayers ? 31 - Math.clz32(fw.defaultLayers) : 0;
-      if (base !== this.model.defaultLayer && base < this.kb.layerCount) this.setBaseLayer(base);
-      else this.render();
-      if (first) this.#updateStatus();
-    });
-  }
-
   stopPolling() {
     this.pollToken++;
     this.matrix = false;
-    this.fw = null;
     this.model?.update([], performance.now());
   }
 
@@ -446,7 +436,7 @@ class HalcyonMonkeytype {
   render() {
     if (!this.kb) return;
     const snap = this.matrix ? this.model.snapshot()
-      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, fw: this.fw });
+      : lockedSnapshot({ dom: this.dom, index: this.index, viewLayer: this.view.layer, baseLayer: this.model.defaultLayer, resolved: this.resolved });
     this.snap = snap;
     const layer = this.previewLayer ?? snap.displayLayer;
     const mask = snap.activeMask | (1 << snap.defaultLayer) | (1 << layer);
@@ -547,14 +537,44 @@ class HalcyonMonkeytype {
     this.hintEl.textContent = steps.length ? steps.join(' + ') + ' + Taste' : '';
   }
 
+  // ---------------------------------------------------------------- preferred keys
+
+  #onKeydown(e) {
+    const ch = e.key.length === 1 ? e.key : null;
+    if (this.matrix) {
+      // the matrix poll may see the press a few ms after the DOM event
+      if (ch) setTimeout(() => this.#learn(ch, e.code), 60);
+      return;
+    }
+    const expectedChar = this.#nextChar();
+    const expected = expectedChar ? this.index.pathFor(expectedChar) : null;
+    const hit = this.index.resolveTyped(e.code, ch, expected, [this.view.layer, this.model.defaultLayer]);
+    if (!hit) return;
+    this.resolved.set(e.code, hit);
+    this.lastPressed = hit.pos;
+  }
+
+  #learn(ch, code) {
+    if (!this.kb || !this.index.learn(ch, code, this.recentPresses.filter((p) => performance.now() - p.downAt < 500))) return;
+    store.set('paths.' + this.kb.uid, this.kb.preferred);
+    this.lastHintChar = undefined;
+    this.#updateHint();
+  }
+
+  #forgetPreferred() {
+    this.kb.preferred = {};
+    store.set('paths.' + this.kb.uid, {});
+    this.lastHintChar = undefined;
+    this.#updateHint();
+  }
+
   // ---------------------------------------------------------------- events
 
   #bind() {
     this.dom.onChange((e) => {
-      if (e && e.type === 'keydown' && !this.matrix && this.index) {
-        const hit = this.index.positionsForCode(e.code, [this.view.layer, this.model.defaultLayer])[0];
-        if (hit) this.lastPressed = hit.pos;
-      }
+      if (!e) this.resolved.clear();
+      else if (e.type === 'keyup') this.resolved.delete(e.code);
+      else if (e.type === 'keydown' && this.index) this.#onKeydown(e);
       this.render();
     });
     window.addEventListener('blur', () => this.render());

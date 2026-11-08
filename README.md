@@ -1,7 +1,7 @@
-# Halcyon Type
+# Ergo Keyboard for Monkeytype
 
-Live-Anzeige deiner Vial-Tastatur für **monkeytype.com**, gebaut für die splitkb **Halcyon**-Reihe
-(Kyria, Corne, Lily58, Elora, Ferris, Sofle). Funktioniert mit jeder Vial-Firmware.
+Live-Anzeige deiner Vial-Tastatur für **monkeytype.com**. Funktioniert mit jeder Tastatur mit Vial-Firmware,
+ohne etwas an der Firmware zu ändern; entstanden für die splitkb **Halcyon**-Reihe (Kyria, Corne, Lily58, Elora, Ferris, Sofle).
 
 Du tippst ganz normal im echten monkeytype mit deinem Account, Ergebnisse und Bestleistungen landen wie immer dort.
 Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modifiern, direkt aus der Firmware gelesen:
@@ -18,14 +18,14 @@ Unter den Wörtern erscheint deine eigene Tastatur samt Keymap, Layern und Modif
 **Variante A – Chrome-Erweiterung** (empfohlen)
 1. `chrome://extensions` öffnen und oben rechts den **Entwicklermodus** einschalten.
 2. **Entpackte Erweiterung laden** und den Ordner `monkeytype/extension` aus diesem Repo wählen.
-3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Halcyon**: anklicken, **Tastatur verbinden**, die Halcyon wählen.
+3. monkeytype.com neu laden. Unten rechts erscheint **⌨ Ergo**: anklicken, **Tastatur verbinden**, die Tastatur wählen.
 4. **Entsperren**: Die App zeigt die Tasten, die du halten musst (Halcyon Kyria ab Werk **T + Y**, ca. 6 s).
    Solange blockiert sie die Eingabe in monkeytype, damit nichts im Test landet.
 
 **Variante B – Userscript**: `monkeytype/halcyon-monkeytype.user.js` in Tampermonkey oder Violentmonkey installieren.
 
 Ab dann verbindet sich die Tastatur beim Öffnen von monkeytype automatisch. Das Entsperren gilt bis zum Abstecken.
-Im Menü **⌨ Halcyon** stellst du außerdem ein:
+Im Menü **⌨ Ergo** stellst du außerdem ein:
 - Systemlayout (Deutsch Mac/Windows, US)
 - Basis-Layer
 - Hände, Hinweise und Layer-Leiste an oder aus
@@ -33,7 +33,21 @@ Im Menü **⌨ Halcyon** stellst du außerdem ein:
 - monkeytypes eigene Keymap ausblenden
 - Größe
 
+### Gesperrt oder entsperrt
+
+- **Gesperrt** (Standard): Die Keymap mit allen Layern liest die App immer, dafür ist kein Entsperren nötig.
+  Tasten sieht sie, sobald sie ein Zeichen tippen. Reine Layer-Tasten (MO, LT …) schicken dem PC nichts,
+  deshalb erscheint ein Layer erst mit der ersten Taste, die darauf tippt.
+- **Entsperrt**: jede Taste live, auch Layer- und Mod-Tap-Tasten, schon beim Halten. Gilt bis zum Abstecken.
+
+### Mehrere Wege zum selben Zeichen
+
+Liegt ein Zeichen auf mehreren Tasten (z. B. „1“ in der Zahlenreihe und auf einem Layer), merkt sich die App den
+Weg, den du zuletzt benutzt hast, und zeigt ihn als nächste Taste. Gelernt wird im entsperrten Modus; gesperrt nutzt
+die App das Gemerkte und den Weg, den sie für das erwartete Zeichen vorgeschlagen hat. Im Menü: **Vergessen**.
+
 Nach Änderungen am Code: `node tools/build-monkeytype.mjs`, dann unter `chrome://extensions` die Erweiterung neu laden.
+Der Build legt auch das Store-Paket `dist/ergo-keyboard-for-monkeytype-<version>.zip` an.
 
 ## Lizenz
 
@@ -88,24 +102,6 @@ Ohne Picture-in-Picture: <http://localhost:8137/?view=keyboard> in einem eigenen
 - **Basis-Layer**: falls du per DF() z. B. auf Colemak umgeschaltet hast. DF-Tasten erkennt die App selbst.
 - Layer-Chips: **Klick** hält einen Layer zur Ansicht fest, **Doppelklick** benennt ihn um.
 - **Tastatur wieder sperren**: Vial-Unlock zurücknehmen.
-
-## Gesperrt tippen mit Layer-Anzeige
-
-Die Keymap mit allen Layern liest die App immer direkt aus der Tastatur, auch gesperrt. Gesperrt fehlt nur,
-welche Taste gerade gedrückt ist. Tasten mit Zeichen sieht die App über monkeytype, reine Layer-Tasten (MO, LT …) nicht.
-
-Mit [`firmware/layer_report.c`](firmware/layer_report.c) meldet die Firmware zusätzlich aktiven Layer, Modifier,
-One-Shot-Mods und Caps Word, ohne Entsperren und ohne preiszugeben, welche Tasten gedrückt sind. Dann zeigt die App
-gesperrt den Layer, sobald du die Layer-Taste hältst (Status „gesperrt · Layer“).
-
-Das funktioniert mit jeder QMK-Tastatur mit Vial, nicht nur mit Halcyon:
-1. `firmware/layer_report.c` in den Keymap-Ordner kopieren.
-2. In dessen `rules.mk` die Zeile `SRC += layer_report.c` ergänzen.
-3. Firmware bauen und flashen.
-
-Hat die Tastatur schon ein eigenes `raw_hid_receive_kb()`, kommt `#define LAYER_REPORT_NO_HOOK` in die `config.h`,
-und die eigene Funktion beginnt mit `if (layer_report_handle(data)) return;`.
-Firmware ohne die Datei antwortet „unbekannt“. Die App merkt das und läuft wie bisher.
 
 ## Grenzen
 

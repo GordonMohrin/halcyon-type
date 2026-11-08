@@ -1,4 +1,4 @@
-/* Halcyon für monkeytype — uses monkeytype's theme variables so it follows every theme.
+/* Ergo Keyboard for Monkeytype — uses monkeytype's theme variables so it follows every theme.
    Key look follows monkeytype's keymap (Keymap.tsx, GPL-3.0): sub-alt keys, sub legends,
    main-colored next key, 250 ms main/error flash, bg-colored homing bars. */
 
@@ -33,7 +33,7 @@
 .hmt-layer.shown { color: var(--hmt-bg); background: var(--hmt-main); }
 .hmt-layer.base:not(.shown) { box-shadow: inset 0 0 0 1px var(--hmt-sub); }
 .hmt-layer.pinned { outline: 1px dashed var(--hmt-main); outline-offset: 2px; }
-.hmt-mod { width: 1.35rem; height: 1.35rem; line-height: 1.35rem; text-align: center; border-radius: 0.3rem; font-size: 0.85rem; color: var(--hmt-sub); opacity: .55; transition: all .08s; }
+.hmt-mod { min-width: 1.35rem; height: 1.35rem; padding: 0 0.4rem; box-sizing: border-box; line-height: 1.35rem; text-align: center; white-space: nowrap; border-radius: 0.3rem; font-size: 0.85rem; color: var(--hmt-sub); opacity: .55; transition: all .08s; }
 .hmt-mod.on { opacity: 1; color: var(--hmt-bg); background: var(--hmt-main); }
 .hmt-mod.oneshot { opacity: 1; color: var(--hmt-main); box-shadow: inset 0 0 0 1px var(--hmt-main); }
 

@@ -69,23 +69,6 @@ const posOf = (layer, kc) => {
   check('matrix multi-byte columns', JSON.stringify(p2) === JSON.stringify(['0,0', '2,3', '7,11']), JSON.stringify(p2));
   await kb.lock();
   check('lock', (await kb.matrixPoll()).length === 0);
-  check('no layer report from plain firmware', kb.layerReport === false && (await kb.layerStatePoll()) === null);
-  await t.close();
-}
-
-// layer state from firmware with layer_report.c, readable while locked
-{
-  const definitionXz = readFileSync(new URL('./fixtures/halcyon-kyria.def.xz', import.meta.url));
-  const dev = new MockVialDevice(demo, { definitionXz, layerReport: true });
-  const t = new HidTransport(dev);
-  await t.open();
-  const kb = new VialKeyboard(t, dev.productName);
-  await kb.load();
-  check('layer report detected', kb.layerReport === true && !kb.unlocked);
-  dev.fw = { layers: (1 << 4) | (1 << 3), defaultLayers: 1, mods: 0x02, oneShotMods: 0x04, flags: 3 };
-  const fw = await kb.layerStatePoll();
-  check('layer state while locked', fw.layers === 0x18 && fw.defaultLayers === 1 && fw.mods === 2 && fw.oneShotMods === 4 && fw.capsWord && fw.capsLock,
-    JSON.stringify(fw));
   await t.close();
 }
 
@@ -176,16 +159,30 @@ const posOf = (layer, kc) => {
   const one = idx.pathFor('1');
   check('path 1 via layer 4', one && one.layer === 4 && one.layerKeys.length === 1);
 
-  const dom = { codes: new Set(), capsLock: false };
-  const fw = { layers: 1 << 4, defaultLayers: 1, mods: 0x02, oneShotMods: 0, capsWord: false, capsLock: false };
-  let snap = lockedSnapshot({ dom, index: idx, viewLayer: 0, baseLayer: 0, fw });
-  check('locked + firmware: layer shown before any key types', snap.displayLayer === 4 && snap.mods === 0x02);
-  check('locked + firmware: layer key lit', snap.keys.get(one.layerKeys[0])?.role === 'hold', JSON.stringify([...snap.keys]));
-  dom.codes.add('Digit1');
-  snap = lockedSnapshot({ dom, index: idx, viewLayer: 4, baseLayer: 0, fw });
-  check('locked + firmware: typed key on layer', snap.keys.get(one.target)?.role === 'active');
-  snap = lockedSnapshot({ dom: { codes: new Set(), capsLock: false }, index: idx, viewLayer: 0, baseLayer: 0, fw: null });
-  check('locked without firmware report: base layer', snap.displayLayer === 0 && snap.keys.size === 0);
+  // "ö" lies on the base layer and on layer 4: locked, the key shown follows hint and preference
+  idx.kb.preferred = {};
+  const oe = idx.charPaths.get('ö');
+  const oeBase = oe.find((p) => p.layer === 0), oeL4 = oe.find((p) => p.layer === 4);
+  const oeCode = idx.codeAt(oeBase.pos, 0);
+  check('ö on base and layer 4 sends the same code', oeL4 && oeCode && idx.codeAt(oeL4.pos, 4) === oeCode && oeBase.pos !== oeL4.pos);
+  check('ö is ambiguous, 1 is not', idx.isAmbiguous('ö') && !idx.isAmbiguous('1'));
+  const oePath4 = { target: oeL4.pos, layer: 4 };
+  let hit = idx.resolveTyped(oeCode, 'ö', oePath4, [0, 0]);
+  check('locked: expected path wins', hit.pos === oeL4.pos && hit.layer === 4);
+  const snap = lockedSnapshot({ dom: { codes: new Set([oeCode]), capsLock: false }, index: idx, viewLayer: 0, baseLayer: 0, resolved: new Map([[oeCode, hit]]) });
+  check('locked: layer of the resolved key shown', snap.displayLayer === 4 && snap.keys.has(oeL4.pos));
+  hit = idx.resolveTyped(oeCode, 'ö', null, [0, 0]);
+  check('locked without context: base key', hit.pos === oeBase.pos && hit.layer === 0);
+
+  check('hint before learning: base', idx.pathFor('ö').layer === 0);
+  const held = [{ pos: oeBase.pos, layer: 0, downAt: 1 }, { pos: oeL4.pos, layer: 4, downAt: 5 }];
+  check('learn layer-4 way for ö (latest press)', idx.learn('ö', oeCode, held) && idx.kb.preferred['ö'] === '4:' + oeL4.pos);
+  check('learn is idempotent', !idx.learn('ö', oeCode, held));
+  check('hint follows preference', idx.pathFor('ö').target === oeL4.pos && idx.pathFor('ö').layer === 4);
+  hit = idx.resolveTyped(oeCode, 'ö', null, [0, 0]);
+  check('locked: preference beats base layer', hit.pos === oeL4.pos && hit.layer === 4);
+  check('learn ignores unambiguous chars', !idx.learn('1', 'Digit1', [{ pos: one.target, layer: 4, downAt: 9 }]));
+  idx.kb.preferred = {};
   check('space found', !!idx.pathFor(' '));
   check('backspace found', !!idx.pathFor('\b'));
   check('DE: S(KC_7) types /', charFor(0x24, 0x02, host) === '/');

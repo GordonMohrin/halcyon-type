@@ -291,43 +291,21 @@ export class FirmwareModel {
 
 // ---------------------------------------------------------------------------
 // Snapshot without matrix access (Vial locked): pressed keys come from DOM key events of the
-// focused window. Layers and modifiers come from the firmware if it reports them
-// (fw = VialKeyboard.layerStatePoll()); otherwise a layer only shows once a key on it types.
+// focused window. Layer keys send nothing, so a layer only shows once a key on it types.
+// resolved: Map(code -> { pos, layer }) chosen when the key went down (see KeymapIndex.resolveTyped).
 
-const HELD_LAYER_KEYS = new Set(['mo', 'layertap', 'tt', 'osl', 'layermod']);
-
-export function lockedSnapshot({ dom, index, viewLayer, baseLayer, fw }) {
+export function lockedSnapshot({ dom, index, viewLayer, baseLayer, resolved = new Map() }) {
   const keys = new Map();
-  if (!fw) {
-    let shown = -1;
-    for (const code of dom.codes) {
-      const hits = index.positionsForCode(code, [viewLayer, baseLayer]);
-      if (!hits.length) continue;
-      keys.set(hits[0].pos, { role: 'active' });
-      if (hits[0].layer !== baseLayer && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hits[0].layer);
-    }
-    return {
-      activeMask: (1 << baseLayer) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : baseLayer, defaultLayer: baseLayer,
-      mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
-    };
-  }
-  const base = fw.defaultLayers ? highestBit(fw.defaultLayers) : baseLayer;
-  const mask = fw.layers | (1 << base);
-  const display = highestBit(mask);
+  let shown = -1;
   for (const code of dom.codes) {
-    const hits = index.positionsForCode(code, [display, base]);
-    if (hits.length) keys.set(hits[0].pos, { role: 'active' });
-  }
-  // The firmware doesn't say which key holds a layer: light the layer keys that can do it.
-  for (let l = 0; l < 32; l++) {
-    if (l === base || !(mask & (1 << l))) continue;
-    for (const k of index.layerKeys.get(l) || []) {
-      if (HELD_LAYER_KEYS.has(k.kind) && mask & (1 << k.from) && !keys.has(k.pos)) keys.set(k.pos, { role: 'hold' });
-    }
+    const hit = resolved.get(code) || index.positionsForCode(code, [viewLayer, baseLayer])[0];
+    if (!hit) continue;
+    keys.set(hit.pos, { role: 'active' });
+    if (hit.layer !== baseLayer && !/Shift|Control|Alt|Meta/.test(code)) shown = Math.max(shown, hit.layer);
   }
   return {
-    activeMask: mask, displayLayer: display, defaultLayer: base,
-    mods: fw.mods, oneShotMods: fw.oneShotMods, oneShotLayer: -1, capsWord: fw.capsWord, capsLock: fw.capsLock || dom.capsLock, keys,
+    activeMask: (1 << baseLayer) | (shown >= 0 ? 1 << shown : 0), displayLayer: shown >= 0 ? shown : baseLayer, defaultLayer: baseLayer,
+    mods: 0, oneShotMods: 0, oneShotLayer: -1, capsWord: false, capsLock: dom.capsLock, keys,
   };
 }
 

@@ -53,7 +53,6 @@ const app = {
   model: null,
   index: null,
   matrix: false,         // live matrix polling active
-  fw: null,              // layer state reported by the firmware while locked
   pollToken: 0,
   previewLayer: null,
   hint: null,
@@ -92,13 +91,11 @@ function updateStatus() {
     setStatus('Demo · ' + kbName(), 'demo');
   } else if (app.matrix) {
     setStatus(kbName() + ' · live', 'live');
-  } else if (app.vial?.layerReport) {
-    setStatus(kbName() + ' · gesperrt, Layer von der Firmware', 'locked');
   } else {
     setStatus(kbName() + ' · gesperrt (nur Fokus-Modus)', 'locked');
   }
   show($('#btn-connect'), app.source !== 'hid');
-  show($('#unlock-banner'), app.source === 'hid' && !app.matrix && !app.vial?.unlocked && !app.vial?.layerReport && !store.get('unlockDismissed', false));
+  show($('#unlock-banner'), app.source === 'hid' && !app.matrix && !app.vial?.unlocked && !store.get('unlockDismissed', false));
   show($('#btn-lock'), app.source === 'hid' && app.vial?.unlocked);
   show($('#kbd-empty'), !app.kb);
 }
@@ -225,10 +222,8 @@ async function loadDemo() {
 
 // ------------------------------------------------------------------ live matrix polling
 
-/** Unlocked: poll the switch matrix. Locked: poll the layer state if the firmware reports it. */
 function pollForState() {
   if (app.vial?.unlocked) startPolling();
-  else if (app.vial?.layerReport) startLayerPolling();
   else stopPolling();
 }
 
@@ -240,20 +235,6 @@ function startPolling() {
     if (current() && app.model.update(pressed, performance.now())) render();
   });
   updateStatus();
-}
-
-function startLayerPolling() {
-  stopPolling();
-  let last = '';
-  pollLoop(async (current) => {
-    const fw = await app.vial.layerStatePoll();
-    if (!current() || !fw) return;
-    const key = JSON.stringify(fw);
-    if (key === last) return;
-    last = key;
-    app.fw = fw;
-    render();
-  });
 }
 
 function pollLoop(step) {
@@ -282,7 +263,6 @@ function pollLoop(step) {
 function stopPolling() {
   app.pollToken++;
   app.matrix = false;
-  app.fw = null;
   if (app.model) { app.model.update([], performance.now()); }
 }
 
@@ -343,7 +323,7 @@ let lastSnap = null;
 function render() {
   if (!app.kb) return;
   const snap = app.matrix ? app.model.snapshot()
-    : lockedSnapshot({ dom, index: app.index, viewLayer: view.layer, baseLayer: app.model.defaultLayer, fw: app.fw });
+    : lockedSnapshot({ dom, index: app.index, viewLayer: view.layer, baseLayer: app.model.defaultLayer });
   lastSnap = snap;
   const focused = document.hasFocus();
   const layer = app.previewLayer ?? snap.displayLayer;
