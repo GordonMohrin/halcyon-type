@@ -20,7 +20,6 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
 - [ ] **Bevorzugte Tasten in der eigenständigen App**: Lernen und Nutzen gibt es bisher nur im monkeytype-Overlay.
 
 ### Tests
-- [ ] Zweite Tastatur testen.
 - [ ] Systemlayout „Automatisch“ erkennt auf Gordons Windows „US“: prüfen, ob das stimmt.
 
 ## Grenzen (nicht lösbar ohne Firmware-Änderung)
@@ -29,6 +28,9 @@ Feature-Wünsche (FR) und Bugs für Split Keyboard for monkeytype. Neueste oben 
   Abstecken). Eine Firmware-Erweiterung wurde ausprobiert und wieder verworfen: Nutzer sollen nichts flashen müssen.
 
 ## Erledigt
+- [x] Test W-CORNE (Vial ohne Sperre, 4×12, 46 Tasten): verbindet live ohne Entsperren, Layout und Beschriftung
+  stimmen, L1/L2 beim Halten schalten live um, gedrückte Tasten auf dem Layer werden gezeigt.
+- [x] FR: Im Menü „Andere Tastatur“; monkeytype verbindet beim Öffnen die zuletzt benutzte Tastatur.
 - [x] Test Elora live: „!“ über die Layer-2-Taste gelernt, Menü zeigt „2 bevorzugte Tasten gemerkt“ + Vergessen.
 - [x] Bug: Lernen ignorierte Tasten mit eingebautem Shift (z. B. `S(KC_1)` = „!“ auf Layer 2).
 - [x] Bug: Lernen hing an Tastenereignissen der Seite und tat nichts, wenn ein anderes Fenster den Fokus hatte.
