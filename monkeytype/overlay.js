@@ -141,6 +141,7 @@ class HalcyonMonkeytype {
     else if (this.source !== 'hid') actions.append(btn('Tastatur verbinden', () => this.connectClicked(), true));
     if (this.source === 'hid' && !this.vial?.unlocked) actions.append(btn('Entsperren', () => this.runUnlock(), true));
     if (this.source === 'hid' && this.vial?.unlocked) actions.append(btn('Sperren', () => this.lock()));
+    if (this.source === 'hid') actions.append(btn('Andere Tastatur', () => this.connectClicked()));
     if (this.source !== 'hid' && DEMO_DATA) actions.append(btn(this.source === 'demo' ? 'Demo schließen' : 'Demo', () => (this.source === 'demo' ? this.closeKeyboard() : this.loadDemo())));
     m.append(actions);
 
